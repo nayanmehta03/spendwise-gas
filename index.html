@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Spendwise</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a1f2e'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%234f8ef7' stroke-width='2'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='serif' font-size='14' font-weight='bold' fill='%234f8ef7'%3E%E2%82%B9%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <?!= include('shared-styles'); ?>
+</head>
+<body>
+
+<!-- CENTERED OVERLAY NAV -->
+<div id="navOverlay" class="nav-overlay" onclick="closeNav()">
+  <button class="nav-overlay-close" onclick="closeNav()">✕</button>
+  <nav class="nav-overlay-menu">
+    <button class="nav-overlay-item" onclick="navigateTo('add')">
+      <span class="nav-overlay-icon">＋</span>
+      <span class="nav-overlay-label">Add Expense</span>
+    </button>
+    <button class="nav-overlay-item" onclick="navigateTo('income')">
+      <span class="nav-overlay-icon">↓</span>
+      <span class="nav-overlay-label">Income</span>
+    </button>
+    <button class="nav-overlay-item" onclick="navigateTo('dashboard')">
+      <span class="nav-overlay-icon">⊞</span>
+      <span class="nav-overlay-label">Dashboard</span>
+    </button>
+    <button class="nav-overlay-item" onclick="navigateTo('expenses')">
+      <span class="nav-overlay-icon">≡</span>
+      <span class="nav-overlay-label">Expenses</span>
+    </button>
+    <button class="nav-overlay-item" onclick="navigateTo('analytics')">
+      <span class="nav-overlay-icon">◈</span>
+      <span class="nav-overlay-label">Analytics</span>
+    </button>
+    <button class="nav-overlay-item" onclick="navigateTo('settings')">
+      <span class="nav-overlay-icon">⚙</span>
+      <span class="nav-overlay-label">Settings</span>
+    </button>
+  </nav>
+</div>
+
+<!-- TOPBAR -->
+<header class="topbar" id="topbar">
+  <button class="hamburger-btn" onclick="openNav()" id="hamburgerBtn" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="topbar-title" id="topbarTitle">Spendwise</div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="refreshBtn" title="Refresh">↻</button>
+  </div>
+</header>
+
+<!-- PAGE VIEWS — all included at build time, shown/hidden by router -->
+<main id="appMain">
+
+  <div id="view-add" class="page-view">
+    <?!= include('page-add'); ?>
+  </div>
+
+  <div id="view-dashboard" class="page-view">
+    <?!= include('page-dashboard'); ?>
+  </div>
+
+  <div id="view-expenses" class="page-view">
+    <?!= include('page-expenses'); ?>
+  </div>
+
+  <div id="view-analytics" class="page-view">
+    <?!= include('page-analytics'); ?>
+  </div>
+
+  <div id="view-income" class="page-view">
+    <?!= include('page-income'); ?>
+  </div>
+
+  <div id="view-settings" class="page-view">
+    <?!= include('page-settings'); ?>
+  </div>
+
+</main>
+
+<!-- FLOATING ADD BUTTON (hidden on Add page and when scrolling) -->
+<button class="fab" id="fab" onclick="navigateTo('add')" aria-label="Add expense">＋</button>
+
+<!-- Shared nav, toast, edit modal, shared JS -->
+<?!= include('shared-nav'); ?>
+
+<script>
+// ============================================================
+// SPA ROUTER
+// ============================================================
+const PAGES = {
+  add:       { title: 'Add Expense',  init: () => typeof initAdd       === 'function' && initAdd()       },
+  income:    { title: 'Income',       init: () => typeof initIncome     === 'function' && initIncome()    },
+  dashboard: { title: 'Dashboard',    init: () => typeof initDashboard  === 'function' && initDashboard() },
+  expenses:  { title: 'Expenses',     init: () => typeof initExpenses   === 'function' && initExpenses()  },
+  analytics: { title: 'Analytics',    init: () => typeof initAnalytics  === 'function' && initAnalytics() },
+  settings:  { title: 'Settings',     init: () => typeof initSettings   === 'function' && initSettings()  },
+};
+
+const _initialized = {};
+let   _currentPage = null;
+
+// FAB: hide while scrolling, show on Add page
+let _lastScrollY = 0;
+window.addEventListener('scroll', () => {
+  const fab = document.getElementById('fab');
+  if (!fab) return;
+  const going = window.scrollY > _lastScrollY + 10;
+  fab.classList.toggle('fab-hidden', going);
+  _lastScrollY = window.scrollY;
+}, { passive: true });
+
+function navigateTo(page) {
+  if (!PAGES[page]) return;
+  closeNav();
+
+  // Hide all views
+  document.querySelectorAll('.page-view').forEach(v => v.classList.remove('active'));
+
+  // Show target view
+  const view = document.getElementById('view-' + page);
+  if (view) view.classList.add('active');
+
+  // Update title
+  document.getElementById('topbarTitle').textContent = PAGES[page].title;
+
+  // FAB: hide on Add and Income pages (both have inline forms)
+  const fab = document.getElementById('fab');
+  if (fab) {
+    if (page === 'add' || page === 'income') {
+      fab.style.display = 'none';
+    } else {
+      fab.style.display = '';
+      fab.classList.remove('fab-hidden');
+    }
+  }
+
+  // Mark active nav item
+  document.querySelectorAll('.nav-overlay-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick').includes("'" + page + "'"));
+  });
+
+  // Lazy init: call page init function only on first visit
+  if (!_initialized[page]) {
+    _initialized[page] = true;
+    PAGES[page].init();
+  }
+
+  _currentPage = page;
+
+  // Push URL state (best-effort — GAS may ignore the hash)
+  try {
+    history.replaceState({ page }, '', location.href.split('?')[0] + '?page=' + page);
+  } catch(e) {}
+}
+
+// Overlay nav: toggle open/close
+function openNav() {
+  document.getElementById('navOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeNav() {
+  document.getElementById('navOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Refresh button delegates to current page
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  const fn = { add: 'refreshAdd', income: 'refreshIncome', dashboard: 'refreshDashboard', expenses: 'refreshExpenses', analytics: 'refreshAnalytics', settings: 'refreshSettings' }[_currentPage];
+  if (fn && typeof window[fn] === 'function') window[fn]();
+  else showToast('Refreshed', 'info');
+});
+
+// ── Boot: activate initial page from server ──────────────────
+// initPage is injected server-side via <?= initPage ?> scriptlet
+const _bootPage = '<?= initPage ?>';
+navigateTo(_bootPage || 'add');
+</script>
+
+</body>
+</html>

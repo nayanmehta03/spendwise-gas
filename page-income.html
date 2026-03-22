@@ -1,0 +1,369 @@
+<div class="page-content">
+
+  <!-- ADD INCOME FORM -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-header" style="margin-bottom:12px;">
+      <h3>Add Income</h3>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Amount *</label>
+        <div class="amount-input-wrap" style="border-color:rgba(111,207,151,0.3);">
+          <span class="currency-symbol" style="color:var(--accent2);">₹</span>
+          <input type="number" id="incAmount" placeholder="0.00" step="0.01" min="0"
+            class="amount-input" inputmode="decimal" style="color:var(--accent2);" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Date *</label>
+        <input type="date" id="incDate" class="form-input" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Category *</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="inc-cat-btn" data-cat="Salary"        onclick="_selectIncCat('Salary')">💼 Salary</button>
+        <button class="inc-cat-btn" data-cat="Bonus"         onclick="_selectIncCat('Bonus')">🎯 Bonus</button>
+        <button class="inc-cat-btn" data-cat="Miscellaneous" onclick="_selectIncCat('Miscellaneous')">📦 Miscellaneous</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Description *</label>
+      <input type="text" id="incDescription" placeholder="e.g. March salary, Quarterly bonus..."
+        class="form-input" autocomplete="off" />
+    </div>
+
+    <div class="form-group">
+      <label>Notes</label>
+      <input type="text" id="incNotes" placeholder="Optional..." class="form-input" />
+    </div>
+
+    <button class="btn-income btn-full" id="submitIncome">
+      <span id="incSubmitText">Save Income</span>
+      <span id="incSubmitSpinner" class="hidden"><span class="spinner"></span></span>
+    </button>
+  </div>
+
+  <!-- INCOME LIST -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <span id="incCount" style="color:var(--text2);font-size:13px;">Loading...</span>
+      <span id="incTotal" style="font-weight:600;color:var(--accent2);font-size:14px;margin-left:10px;"></span>
+    </div>
+    <button class="btn-outline btn-sm" id="incLoadAllBtn" style="display:none;">Load all months</button>
+  </div>
+
+  <div id="incMonthLabel" style="display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg3);color:var(--accent2);border:1px solid rgba(111,207,151,0.3);margin-bottom:10px;"></div>
+
+  <div id="incomeList" class="expense-list">
+    <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+    <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+  </div>
+
+</div>
+
+<style>
+.inc-cat-btn {
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text2); cursor: pointer; font-size: 13px;
+  font-family: 'DM Sans', sans-serif; transition: var(--transition);
+  min-height: 40px; white-space: nowrap;
+}
+.inc-cat-btn:hover   { border-color: var(--accent2); color: var(--text); }
+.inc-cat-btn.selected { border-color: var(--accent2); background: rgba(111,207,151,0.12); color: var(--accent2); font-weight: 600; }
+
+.btn-income {
+  background: var(--accent2); color: #0d2010; border: none;
+  border-radius: var(--radius-sm); padding: 12px 20px;
+  font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 15px;
+  cursor: pointer; transition: var(--transition);
+  min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn-income.btn-full { width: 100%; }
+.btn-income:hover  { background: #5dbd82; }
+.btn-income:active { transform: scale(0.98); }
+
+.income-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px; background: var(--bg2);
+  border: 1px solid rgba(111,207,151,0.15);
+  border-radius: var(--radius-sm); transition: var(--transition); min-height: 60px;
+}
+.income-item:hover { background: var(--bg3); border-color: rgba(111,207,151,0.3); }
+.income-icon {
+  font-size: 18px; width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(111,207,151,0.1); border-radius: 8px; flex-shrink: 0;
+}
+.income-amount { font-family: 'DM Serif Display', serif; font-size: 16px; color: var(--accent2); white-space: nowrap; }
+
+/* Monthly summary row — sits between month label and detail entries */
+.inc-month-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 8px 12px; margin-bottom: 6px;
+  background: rgba(111,207,151,0.06);
+  border: 1px solid rgba(111,207,151,0.2);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+.inc-month-summary-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.inc-summary-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 99px;
+  background: var(--bg3); border: 1px solid var(--border);
+  font-size: 12px; color: var(--text2);
+}
+.inc-summary-pill strong { color: var(--accent2); font-weight: 600; }
+.inc-month-summary-total {
+  font-family: 'DM Serif Display', serif;
+  font-size: 15px; color: var(--accent2);
+  white-space: nowrap; font-weight: 600;
+}
+</style>
+
+<script>
+// ============================================================
+// PAGE: INCOME
+// Reads/writes directly to Config sheet Income tab — no sharding.
+// ============================================================
+
+const _INC_CAT_ICONS = { Salary: '💼', Bonus: '🎯', Miscellaneous: '📦' };
+
+let _incAllIncome   = [];
+let _incSelectedCat = null;
+let _incInitialized = false;
+let _incAllLoaded   = false;
+
+function initIncome() {
+  if (_incInitialized) return;
+  _incInitialized = true;
+  document.getElementById('incDate').value = todayStr();
+  document.getElementById('submitIncome').addEventListener('click', _submitIncome);
+  document.getElementById('incLoadAllBtn').addEventListener('click', _loadAllIncome);
+  _loadAllIncome(); // default: load all months (income data is small, no sharding)
+}
+
+function refreshIncome() {
+  _loadAllIncome();
+}
+
+// ── Data loading ─────────────────────────────────────────────
+function _loadAllIncome() {
+  document.getElementById('incMonthLabel').textContent = 'All time';
+  google.script.run
+    .withSuccessHandler(rows => {
+      _incAllLoaded = true;
+      // getAllIncome now returns a plain array, not { income: [...] }
+      _incAllIncome = Array.isArray(rows) ? rows : (rows && rows.income) || [];
+      _renderIncomeList(_incAllIncome);
+    })
+    .withFailureHandler(() => showToast('Failed to load income', 'error'))
+    .getAllIncome();
+}
+
+// ── Render ───────────────────────────────────────────────────
+function _renderIncomeList(items) {
+  const total = items.reduce((s, r) => s + r.amount, 0);
+  document.getElementById('incCount').textContent = `${items.length} entr${items.length !== 1 ? 'ies' : 'y'}`;
+  document.getElementById('incTotal').textContent = '+' + fmt(total);
+
+  if (!items.length) {
+    document.getElementById('incomeList').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">💰</div><p>No income entries yet</p><small>Add your first income above</small></div>`;
+    return;
+  }
+
+  // Group by month
+  const groups = {};
+  items.forEach(r => {
+    const mk = r.date ? r.date.substring(0, 7) : 'Unknown';
+    if (!groups[mk]) groups[mk] = [];
+    groups[mk].push(r);
+  });
+
+  document.getElementById('incomeList').innerHTML = Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .map(mk => {
+      const label = mk !== 'Unknown'
+        ? new Date(mk + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+        : 'Unknown';
+
+      // Monthly category subtotals
+      const catTotals = {};
+      groups[mk].forEach(r => {
+        catTotals[r.category] = (catTotals[r.category] || 0) + r.amount;
+      });
+      const monthTotal = groups[mk].reduce((s, r) => s + r.amount, 0);
+
+      const summaryPills = Object.entries(catTotals)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, amt]) =>
+          `<span class="inc-summary-pill">
+            ${_INC_CAT_ICONS[cat] || '📦'} ${esc(cat)}
+            <strong>+${fmt(amt)}</strong>
+          </span>`
+        ).join('');
+
+      const monthlySummary = `
+        <div class="inc-month-summary">
+          <div class="inc-month-summary-pills">${summaryPills}</div>
+          <div class="inc-month-summary-total">+${fmt(monthTotal)}</div>
+        </div>`;
+
+      // Detailed entries below summary
+      const detailRows = groups[mk].map(r => `
+        <div class="income-item">
+          <div class="income-icon">${_INC_CAT_ICONS[r.category] || '📦'}</div>
+          <div class="expense-info">
+            <div class="expense-desc">${esc(r.description)}</div>
+            <div class="expense-meta">
+              <span class="expense-tag" style="background:rgba(111,207,151,0.1);color:var(--accent2);">${esc(r.category)}</span>
+              ${r.notes ? `<span>${esc(r.notes)}</span>` : ''}
+            </div>
+          </div>
+          <div class="expense-right">
+            <div class="income-amount">+${fmt(r.amount)}</div>
+            <div class="expense-date">${formatDate(r.date)}</div>
+          </div>
+          <div class="expense-actions">
+            <button class="action-btn edit" onclick="_editIncome('${esc(r.id)}')" title="Edit">✎</button>
+            <button class="action-btn" onclick="_deleteIncome('${esc(r.id)}')" title="Delete">✕</button>
+          </div>
+        </div>`).join('');
+
+      return `<div class="month-group-label">${label}</div>${monthlySummary}${detailRows}`;
+    }).join('');
+}
+
+// ── Category selector ────────────────────────────────────────
+function _selectIncCat(name) {
+  _incSelectedCat = name;
+  document.querySelectorAll('.inc-cat-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.cat === name);
+  });
+}
+
+// ── Submit ───────────────────────────────────────────────────
+function _submitIncome() {
+  const amount = parseFloat(document.getElementById('incAmount').value);
+  const date   = document.getElementById('incDate').value;
+  const desc   = document.getElementById('incDescription').value.trim();
+
+  if (!amount || amount <= 0) return showToast('Enter a valid amount', 'error');
+  if (!date)                   return showToast('Select a date', 'error');
+  if (!desc)                   return showToast('Add a description', 'error');
+  if (!_incSelectedCat)        return showToast('Select a category', 'error');
+
+  const btn = document.getElementById('submitIncome');
+  document.getElementById('incSubmitText').classList.add('hidden');
+  document.getElementById('incSubmitSpinner').classList.remove('hidden');
+  btn.disabled = true;
+
+  const payload = { amount, date, category: _incSelectedCat, description: desc,
+                    notes: document.getElementById('incNotes').value.trim() };
+
+  google.script.run
+    .withSuccessHandler(r => {
+      document.getElementById('incSubmitText').classList.remove('hidden');
+      document.getElementById('incSubmitSpinner').classList.add('hidden');
+      btn.disabled = false;
+      if (r.success) {
+        showToast('Income saved! ✓', 'success');
+        _incAllIncome.unshift({ id: r.id, ...payload });
+        _renderIncomeList(_incAllIncome);
+        document.getElementById('incAmount').value      = '';
+        document.getElementById('incDescription').value = '';
+        document.getElementById('incNotes').value       = '';
+        document.getElementById('incDate').value        = todayStr();
+        _incSelectedCat = null;
+        document.querySelectorAll('.inc-cat-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('incAmount').focus();
+      } else {
+        showToast('Error: ' + (r.message || 'Unknown'), 'error');
+      }
+    })
+    .withFailureHandler(() => {
+      document.getElementById('incSubmitText').classList.remove('hidden');
+      document.getElementById('incSubmitSpinner').classList.add('hidden');
+      btn.disabled = false;
+      showToast('Failed to save. Try again.', 'error');
+    })
+    .addIncome(payload);
+}
+
+// ── Edit ─────────────────────────────────────────────────────
+function _editIncome(id) {
+  const entry = _incAllIncome.find(r => r.id === id);
+  if (!entry) return;
+
+  // Reuse shared edit modal with income-specific adjustments
+  document.getElementById('editAmount').value      = entry.amount;
+  document.getElementById('editDate').value         = entry.date;
+  document.getElementById('editDescription').value  = entry.description;
+  document.getElementById('editNotes').value        = entry.notes || '';
+  document.getElementById('editCategory').innerHTML =
+    ['Salary','Bonus','Miscellaneous'].map(c =>
+      `<option value="${c}" ${c === entry.category ? 'selected' : ''}>${_INC_CAT_ICONS[c]} ${c}</option>`
+    ).join('');
+
+  // Hide payment method — not relevant for income
+  const pmGroup = document.getElementById('editPayment').closest('.form-group');
+  pmGroup.style.display = 'none';
+
+  document.getElementById('editModal').classList.remove('hidden');
+
+  // Override save button with income-specific handler
+  const oldBtn = document.getElementById('saveEdit');
+  const newBtn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+
+  newBtn.addEventListener('click', function() {
+    const updated = {
+      amount:      parseFloat(document.getElementById('editAmount').value),
+      date:        document.getElementById('editDate').value,
+      category:    document.getElementById('editCategory').value,
+      description: document.getElementById('editDescription').value,
+      notes:       document.getElementById('editNotes').value
+    };
+    this.disabled = true; this.textContent = 'Saving...';
+    const b = this;
+    google.script.run
+      .withSuccessHandler(r => {
+        b.disabled = false; b.textContent = 'Save Changes';
+        pmGroup.style.display = ''; // restore for future expense edits
+        closeModal();
+        if (r.success) {
+          const idx = _incAllIncome.findIndex(x => x.id === id);
+          if (idx !== -1) _incAllIncome[idx] = { ..._incAllIncome[idx], ...updated };
+          _renderIncomeList(_incAllIncome);
+          showToast('Income updated!', 'success');
+        } else { showToast('Update failed', 'error'); }
+      })
+      .withFailureHandler(() => {
+        b.disabled = false; b.textContent = 'Save Changes';
+        pmGroup.style.display = '';
+        showToast('Update failed', 'error');
+      })
+      .updateIncome(id, updated);
+  });
+}
+
+// ── Delete ───────────────────────────────────────────────────
+function _deleteIncome(id) {
+  if (!confirm('Delete this income entry?')) return;
+  google.script.run
+    .withSuccessHandler(r => {
+      if (r.success) {
+        _incAllIncome = _incAllIncome.filter(x => x.id !== id);
+        _renderIncomeList(_incAllIncome);
+        showToast('Deleted', 'success');
+      } else { showToast('Delete failed', 'error'); }
+    })
+    .withFailureHandler(() => showToast('Delete failed', 'error'))
+    .deleteIncome(id);
+}
+</script>

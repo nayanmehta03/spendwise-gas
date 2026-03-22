@@ -1,0 +1,341 @@
+<div class="page-content">
+
+  <!-- Summary + filter toggle -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="expCount" style="color:var(--text2);font-size:13px;">Loading...</span>
+      <span id="expTotal" style="font-weight:600;color:var(--accent3);font-size:14px;"></span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="filters-toggle" id="expFiltersBtn">⚙ Filter</button>
+      <button class="btn-outline btn-sm" id="expExportBtn" title="Export CSV">⬇ CSV</button>
+    </div>
+  </div>
+
+  <!-- Filter panel -->
+  <div class="filters-panel" id="expFiltersPanel">
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label>From</label>
+        <input type="date" id="filterStart" class="form-input sm" />
+      </div>
+      <div class="filter-group">
+        <label>To</label>
+        <input type="date" id="filterEnd" class="form-input sm" />
+      </div>
+      <div class="filter-group">
+        <label>Category</label>
+        <select id="filterCategory" class="form-input sm">
+          <option value="All">All</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Min ₹</label>
+        <input type="number" id="filterMin" placeholder="0" class="form-input sm" />
+      </div>
+      <div class="filter-group">
+        <label>Max ₹</label>
+        <input type="number" id="filterMax" placeholder="∞" class="form-input sm" />
+      </div>
+    </div>
+    <div class="filters-actions">
+      <button class="btn-primary btn-sm" id="applyFilters">Apply</button>
+      <button class="btn-outline btn-sm" id="clearFilters">Clear</button>
+    </div>
+  </div>
+
+  <!-- Date range label — updates to reflect what's loaded -->
+  <div id="expRangeLabel" style="display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg3);color:var(--text2);border:1px solid var(--border);margin-bottom:10px;"></div>
+
+  <!-- Loading indicator for cross-shard fetches -->
+  <div id="expFetchLoader" class="page-loader" style="display:none;padding:24px;">
+    <div class="page-loader-spinner"></div>
+    <span id="expFetchLoaderText">Loading expenses...</span>
+  </div>
+
+  <!-- List -->
+  <div id="expensesList" class="expense-list">
+    <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+    <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+    <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// PAGE: EXPENSES
+//
+// ARCHITECTURE:
+//   Default load → current month only (active shard, fast)
+//   Date filter applied → passes startDate/endDate to server
+//   Server's getExpenses() calls _getShardsForRange() to
+//   automatically fan out across all relevant shards.
+//   Category/amount filters applied client-side after data loads.
+//   No "load more" button — the date range IS the shard selector.
+// ============================================================
+
+let _expAllExpenses  = []; // raw server data for current loaded range
+let _expCategories   = [];
+let _expInitialized  = false;
+
+// Active server-side filters (date range — drives shard selection)
+let _expServerFilters = { startDate: null, endDate: null };
+
+function initExpenses() {
+  if (_expInitialized) return;
+  _expInitialized = true;
+
+  // Default: populate date inputs with current month range
+  document.getElementById('filterStart').value = firstOfMonthStr();
+  document.getElementById('filterEnd').value   = todayStr();
+
+  _setupExpenseListeners();
+  _loadExpenses(); // loads current month on first visit
+}
+
+function refreshExpenses() {
+  _loadExpenses();
+}
+
+// ── Core load — sends date range to server, server handles shard fan-out ──
+function _loadExpenses() {
+  const start = _expServerFilters.startDate;
+  const end   = _expServerFilters.endDate;
+
+  // Update range label
+  _updateRangeLabel(start, end);
+
+  // Show loader, hide list
+  document.getElementById('expFetchLoader').style.display = '';
+  document.getElementById('expensesList').style.display   = 'none';
+
+  // Determine shard hint for loader text
+  const crossShard = start && start < firstOfMonthStr();
+  document.getElementById('expFetchLoaderText').textContent =
+    crossShard ? 'Loading across multiple shards...' : 'Loading expenses...';
+
+  // Two parallel calls: expenses (server-side shard-aware) + categories
+  let _done = 0, _parts = {};
+
+  function _onPart(key, data) {
+    _parts[key] = data; _done++;
+    if (_done !== 2) return;
+
+    document.getElementById('expFetchLoader').style.display   = 'none';
+    document.getElementById('expensesList').style.display     = '';
+
+    _expAllExpenses = _parts.expenses || [];
+    _expCategories  = _parts.cats     || [];
+    _populateFilterCats();
+    _renderExpenses(_applyClientFilters(_expAllExpenses));
+  }
+
+  // Expenses: pass date range to server so it fans out to correct shards
+  google.script.run
+    .withSuccessHandler(d => _onPart('expenses', d))
+    .withFailureHandler(() => {
+      _onPart('expenses', []);
+      showToast('Failed to load expenses', 'error');
+    })
+    .getExpenses({ startDate: start, endDate: end });
+
+  google.script.run
+    .withSuccessHandler(d => _onPart('cats', d))
+    .withFailureHandler(() => _onPart('cats', _expCategories))
+    .getCategories();
+}
+
+function _updateRangeLabel(start, end) {
+  const label = document.getElementById('expRangeLabel');
+  if (!start && !end) {
+    label.textContent = 'All time';
+  } else if (start && end) {
+    const s = new Date(start + 'T00:00:00').toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    const e = new Date(end   + 'T00:00:00').toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    label.textContent = s === e ? s : `${s} – ${e}`;
+  } else if (start) {
+    const s = new Date(start + 'T00:00:00').toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    label.textContent = `From ${s}`;
+  } else {
+    const e = new Date(end + 'T00:00:00').toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    label.textContent = `Up to ${e}`;
+  }
+}
+
+// ── Client-side filters (category, amount — no shard impact) ──
+function _applyClientFilters(expenses) {
+  let f = expenses;
+  const cat = document.getElementById('filterCategory').value;
+  const min = document.getElementById('filterMin').value;
+  const max = document.getElementById('filterMax').value;
+  if (cat && cat !== 'All') f = f.filter(e => e.category === cat);
+  if (min)                  f = f.filter(e => e.amount >= parseFloat(min));
+  if (max)                  f = f.filter(e => e.amount <= parseFloat(max));
+  return f;
+}
+
+// ── Render ────────────────────────────────────────────────────
+function _renderExpenses(expenses) {
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  document.getElementById('expCount').textContent = `${expenses.length} expense${expenses.length !== 1 ? 's' : ''}`;
+  document.getElementById('expTotal').textContent = fmt(total);
+
+  if (!expenses.length) {
+    document.getElementById('expensesList').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">📭</div><p>No expenses found</p><small>Try changing the date range or filters</small></div>`;
+    return;
+  }
+
+  const catMap = {};
+  _expCategories.forEach(c => catMap[c.name] = c.icon);
+
+  // Group by month, newest first
+  const groups = {};
+  expenses.forEach(e => {
+    const mk = e.date ? e.date.substring(0, 7) : 'Unknown';
+    if (!groups[mk]) groups[mk] = [];
+    groups[mk].push(e);
+  });
+
+  document.getElementById('expensesList').innerHTML = Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .map(mk => {
+      const label = mk !== 'Unknown'
+        ? new Date(mk + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+        : 'Unknown';
+      return `<div class="month-group-label">${label}</div>` +
+        groups[mk].map(e => `
+          <div class="expense-item">
+            <div class="expense-icon">${catMap[e.category] || '📦'}</div>
+            <div class="expense-info">
+              <div class="expense-desc">${esc(e.description)}</div>
+              <div class="expense-meta">
+                <span class="expense-tag">${esc(e.category)}</span>
+                <span>${esc(e.paymentMethod)}</span>
+                ${e.notes ? `<span>${esc(e.notes)}</span>` : ''}
+              </div>
+            </div>
+            <div class="expense-right">
+              <div class="expense-amount">${fmt(e.amount)}</div>
+              <div class="expense-date">${formatDate(e.date)}</div>
+            </div>
+            <div class="expense-actions">
+              <button class="action-btn edit" onclick="_expEdit('${esc(e.id)}')" title="Edit">✎</button>
+              <button class="action-btn" onclick="_expDelete('${esc(e.id)}')" title="Delete">✕</button>
+            </div>
+          </div>`).join('');
+    }).join('');
+}
+
+// ── Edit / Delete ─────────────────────────────────────────────
+function _expEdit(id) {
+  openEditModal(id, _expAllExpenses, _expCategories, () => {
+    const idx = _expAllExpenses.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      _expAllExpenses[idx] = {
+        ..._expAllExpenses[idx],
+        amount:        parseFloat(document.getElementById('editAmount').value),
+        date:          document.getElementById('editDate').value,
+        description:   document.getElementById('editDescription').value,
+        category:      document.getElementById('editCategory').value,
+        paymentMethod: document.getElementById('editPayment').value,
+        notes:         document.getElementById('editNotes').value
+      };
+    }
+    _renderExpenses(_applyClientFilters(_expAllExpenses));
+  });
+}
+
+function _expDelete(id) {
+  if (!confirm('Delete this expense?')) return;
+  google.script.run
+    .withSuccessHandler(r => {
+      if (r.success) {
+        _expAllExpenses = _expAllExpenses.filter(e => e.id !== id);
+        _renderExpenses(_applyClientFilters(_expAllExpenses));
+        showToast('Deleted', 'success');
+      } else {
+        showToast('Delete failed', 'error');
+      }
+    })
+    .withFailureHandler(() => showToast('Delete failed', 'error'))
+    .deleteExpense(id);
+}
+
+// ── Filter helpers ────────────────────────────────────────────
+function _populateFilterCats() {
+  const sel = document.getElementById('filterCategory');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="All">All Categories</option>' +
+    _expCategories.map(c => `<option value="${esc(c.name)}">${c.icon} ${esc(c.name)}</option>`).join('');
+  sel.value = cur; // preserve selection
+}
+
+function _setupExpenseListeners() {
+
+  // Filter panel toggle
+  document.getElementById('expFiltersBtn').addEventListener('click', () => {
+    document.getElementById('expFiltersPanel').classList.toggle('open');
+    document.getElementById('expFiltersBtn').classList.toggle('active');
+  });
+
+  // Apply — date range triggers server re-fetch; category/amount filter client-side only
+  document.getElementById('applyFilters').addEventListener('click', () => {
+    const start = document.getElementById('filterStart').value || null;
+    const end   = document.getElementById('filterEnd').value   || null;
+
+    const dateRangeChanged =
+      start !== _expServerFilters.startDate ||
+      end   !== _expServerFilters.endDate;
+
+    _expServerFilters = { startDate: start, endDate: end };
+
+    document.getElementById('expFiltersPanel').classList.remove('open');
+    document.getElementById('expFiltersBtn').classList.remove('active');
+
+    if (dateRangeChanged) {
+      // Date changed → must re-fetch from server (different shards may be needed)
+      _loadExpenses();
+    } else {
+      // Only category/amount changed → filter existing data client-side instantly
+      _renderExpenses(_applyClientFilters(_expAllExpenses));
+    }
+  });
+
+  // Clear — reset to current month default
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('filterStart').value    = firstOfMonthStr();
+    document.getElementById('filterEnd').value      = todayStr();
+    document.getElementById('filterCategory').value = 'All';
+    document.getElementById('filterMin').value      = '';
+    document.getElementById('filterMax').value      = '';
+
+    _expServerFilters = { startDate: firstOfMonthStr(), endDate: todayStr() };
+    _loadExpenses();
+  });
+
+  // Export — uses current server filters
+  document.getElementById('expExportBtn').addEventListener('click', () => {
+    showToast('Preparing CSV...', 'info');
+    google.script.run
+      .withSuccessHandler(csv => {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `spendwise_${_expServerFilters.startDate || 'all'}_${_expServerFilters.endDate || 'all'}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('CSV downloaded!', 'success');
+      })
+      .withFailureHandler(() => showToast('Export failed', 'error'))
+      .exportToCSV({
+        startDate: _expServerFilters.startDate,
+        endDate:   _expServerFilters.endDate,
+        category:  document.getElementById('filterCategory').value !== 'All'
+                   ? document.getElementById('filterCategory').value : null
+      });
+  });
+}
+</script>

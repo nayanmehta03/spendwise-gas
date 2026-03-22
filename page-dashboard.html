@@ -1,0 +1,214 @@
+<div class="page-content section-gap">
+
+  <!-- STAT CARDS — skeleton first, replaced on load -->
+  <div class="stats-row" id="dashStatsRow">
+    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
+    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
+    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
+    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
+  </div>
+
+  <!-- QUICK ADD BANNER -->
+  <button class="btn-quick-add" onclick="navigateTo('add')">
+    <span class="quick-add-icon">＋</span>
+    <div class="quick-add-text">
+      <span class="quick-add-title">Add Expense</span>
+      <span class="quick-add-sub">Log a new transaction instantly</span>
+    </div>
+    <span class="quick-add-arrow">→</span>
+  </button>
+
+  <!-- BUDGET — always visible, skeleton until data loads -->
+  <div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <h3 style="font-size:15px;">Monthly Budget</h3>
+      <button class="link-btn" onclick="navigateTo('settings')">Edit budgets →</button>
+    </div>
+    <div class="budget-grid" id="dashBudgetGrid">
+      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:80%"></div></div>
+      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:80%"></div></div>
+      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:60%"></div></div>
+    </div>
+  </div>
+
+  <!-- RECENT EXPENSES -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Recent Expenses</h3>
+      <button class="link-btn" onclick="navigateTo('expenses')">View all →</button>
+    </div>
+    <div id="dashRecentList" class="expense-list">
+      <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+      <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+      <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+    </div>
+  </div>
+
+  <!-- Last updated -->
+  <p id="dashLastUpdated" style="text-align:center;font-size:11px;color:var(--text3);"></p>
+
+</div>
+
+<script>
+// ============================================================
+// PAGE: DASHBOARD
+// Dashboard loads via three parallel google.script.run calls: stats, budget, recent.
+// Skeleton placeholders show immediately; each section fills in independently.
+// ============================================================
+
+let _dashData        = null;
+let _dashInitialized = false;
+
+function initDashboard() {
+  if (_dashInitialized) return;
+  _dashInitialized = true;
+  _loadDashboard();
+}
+
+function refreshDashboard() {
+  _loadDashboard();
+  showToast('Refreshing...', 'info');
+}
+
+function _loadDashboard() {
+  // Fire 3 small calls in parallel — each stays well under GAS 50KB limit
+  let _results = {};
+  let _done    = 0;
+
+  function _onPart(key, data) {
+    _results[key] = data;
+    _done++;
+    if (_done === 3) _assembleDashboard(_results);
+  }
+
+  function _onFail(key) {
+    return () => {
+      _results[key] = null;
+      _done++;
+      if (_done === 3) _assembleDashboard(_results);
+    };
+  }
+
+  google.script.run
+    .withSuccessHandler(d => _onPart('stats',  d))
+    .withFailureHandler(_onFail('stats'))
+    .getDashboardStats();
+
+  google.script.run
+    .withSuccessHandler(d => _onPart('budget', d))
+    .withFailureHandler(_onFail('budget'))
+    .getDashboardBudget();
+
+  google.script.run
+    .withSuccessHandler(d => _onPart('recent', d))
+    .withFailureHandler(_onFail('recent'))
+    .getDashboardRecent();
+}
+
+function _assembleDashboard(parts) {
+  const stats  = parts.stats  || {};
+  const budget = parts.budget || {};
+  const recent = parts.recent || {};
+
+  const data = {
+    analytics: {
+      totalSpent:        stats.totalSpent        || 0,
+      totalTransactions: stats.totalTransactions || 0,
+      avgPerDay:         stats.avgPerDay         || 0,
+      avgPerTransaction: stats.avgPerTransaction || 0,
+      topCategories:     stats.topCategory ? [stats.topCategory] : [],
+    },
+    budgetSummary:  budget.budgetSummary  || [],
+    categories:     budget.categories    || [],
+    recentExpenses: recent.recentExpenses || [],
+    lastUpdated:    stats.lastUpdated     || new Date().toISOString()
+  };
+
+  _dashData = data;
+  _renderDashboard(data);
+}
+
+function _renderDashboard(data) {
+  if (!data) return;
+  const a    = data.analytics  || {};
+  const cats = data.categories || [];
+
+  // Stat cards
+  document.getElementById('dashStatsRow').innerHTML = `
+    <div class="stat-card accent-green">
+      <div class="stat-label">Total This Month</div>
+      <div class="stat-value">${fmt(a.totalSpent)}</div>
+      <div class="stat-sub">${a.totalTransactions || 0} transactions</div>
+    </div>
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Daily Average</div>
+      <div class="stat-value">${fmt(a.avgPerDay)}</div>
+      <div class="stat-sub">per day</div>
+    </div>
+    <div class="stat-card accent-orange">
+      <div class="stat-label">Avg per Txn</div>
+      <div class="stat-value">${fmt(a.avgPerTransaction)}</div>
+      <div class="stat-sub">per expense</div>
+    </div>
+    <div class="stat-card accent-purple">
+      <div class="stat-label">Top Category</div>
+      <div class="stat-value" style="font-size:15px;padding-top:4px;">${a.topCategories && a.topCategories[0] ? a.topCategories[0].category : '—'}</div>
+      <div class="stat-sub">${a.topCategories && a.topCategories[0] ? fmt(a.topCategories[0].amount) : ''}</div>
+    </div>`;
+
+  // Budget cards
+  _renderDashBudget(data.budgetSummary || []);
+
+  // Recent expenses
+  _renderDashRecent(data.recentExpenses || [], cats);
+
+  // Last updated
+  const ts = new Date(data.lastUpdated);
+  document.getElementById('dashLastUpdated').textContent =
+    'Updated ' + ts.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function _renderDashBudget(budget) {
+  document.getElementById('dashBudgetGrid').innerHTML = budget.length === 0
+    ? `<p style="color:var(--text3);font-size:13px;grid-column:1/-1;">No budget set. <button class="link-btn" onclick="navigateTo('settings')">Add budgets →</button></p>`
+    : budget.map(b => {
+        const cls = b.percentage >= 100 ? 'over' : b.percentage >= 80 ? 'warn' : 'safe';
+        const rem = b.budget - b.spent;
+        return `<div class="budget-card">
+          <div class="budget-top">
+            <div class="budget-cat-name">${b.icon} ${esc(b.category)}</div>
+            <span class="budget-pct-badge ${cls}">${b.percentage}%</span>
+          </div>
+          <div class="budget-amounts"><span>Spent</span><span>Budget</span></div>
+          <div><span class="budget-spent">${fmt(b.spent)}</span><span class="budget-of"> of ${fmt(b.budget)}</span></div>
+          <div class="budget-bar-bg"><div class="budget-bar ${cls}" style="width:${Math.min(b.percentage,100)}%"></div></div>
+          <div class="budget-remaining">${rem >= 0
+            ? `<span class="positive">${fmt(rem)} remaining</span>`
+            : `<span class="negative">${fmt(Math.abs(rem))} over</span>`}</div>
+        </div>`;
+      }).join('');
+}
+
+function _renderDashRecent(expenses, cats) {
+  const catMap = {};
+  cats.forEach(c => catMap[c.name] = c.icon);
+
+  document.getElementById('dashRecentList').innerHTML = expenses.length === 0
+    ? `<div class="empty-state"><div class="empty-icon">💸</div><p>No expenses yet</p><small>Tap + to get started</small></div>`
+    : expenses.map(e => `
+      <div class="expense-item">
+        <div class="expense-icon">${catMap[e.category] || '📦'}</div>
+        <div class="expense-info">
+          <div class="expense-desc">${esc(e.description)}</div>
+          <div class="expense-meta">
+            <span class="expense-tag">${esc(e.category)}</span>
+            <span>${esc(e.paymentMethod)}</span>
+          </div>
+        </div>
+        <div class="expense-right">
+          <div class="expense-amount">${fmt(e.amount)}</div>
+          <div class="expense-date">${formatDate(e.date)}</div>
+        </div>
+      </div>`).join('');
+}
+</script>

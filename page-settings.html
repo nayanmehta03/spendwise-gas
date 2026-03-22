@@ -1,0 +1,652 @@
+<div class="page-content">
+
+  <!-- CATEGORIES & BUDGETS -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Categories &amp; Budgets</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div id="catEditorList" class="cat-editor-list">
+        <div class="skeleton" style="height:48px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+        <div class="skeleton" style="height:48px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+        <div class="skeleton" style="height:48px;border-radius:var(--radius-sm);"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn-outline btn-sm" id="addCatBtn">+ Add Category</button>
+        <button class="btn-primary btn-sm" id="saveCatsBtn">Save Categories</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERAL -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>General</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div class="card" style="padding:0;">
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Currency Symbol</span>
+          <input type="text" id="setCurrency" class="form-input sm" style="width:60px;text-align:center;" maxlength="3" />
+        </div>
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Default Payment Method</span>
+          <select id="setDefaultPayment" class="form-input sm" style="width:auto;"></select>
+        </div>
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Week Starts On</span>
+          <select id="setWeekStart" class="form-input sm" style="width:auto;">
+            <option value="Monday">Monday</option>
+            <option value="Sunday">Sunday</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn-primary btn-sm" id="saveSettingsBtn">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEEKLY EMAIL REPORT -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Weekly Email Report</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div class="card" style="padding:0;">
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Enable Weekly Report</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setReportEnabled" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+        <div id="reportOptions">
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Send To</span>
+            <input type="email" id="setReportEmail" class="form-input sm" placeholder="your@email.com" style="width:200px;" />
+          </div>
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Send On</span>
+            <select id="setReportDay" class="form-input sm" style="width:auto;">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+              <option value="Sunday">Sunday</option>
+            </select>
+          </div>
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Send At</span>
+            <select id="setReportTime" class="form-input sm" style="width:auto;">
+              <option value="7">7:00 AM</option>
+              <option value="8">8:00 AM</option>
+              <option value="9">9:00 AM</option>
+              <option value="12">12:00 PM</option>
+              <option value="18">6:00 PM</option>
+              <option value="20">8:00 PM</option>
+            </select>
+          </div>
+          <div class="settings-row" style="padding:10px 16px;background:var(--bg2);border-radius:0 0 var(--radius-sm) var(--radius-sm);">
+            <p style="font-size:12px;color:var(--text3);margin:0;">Includes: weekly spend vs last week, top categories, budget alerts, income summary</p>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-primary btn-sm" id="saveReportBtn">Save Report Settings</button>
+        <button class="btn-outline btn-sm" id="testReportBtn">Send Test Email</button>
+      </div>
+      <div id="mailPermBanner" class="hidden"
+        style="margin-top:12px;background:rgba(242,153,74,0.08);border:1px solid rgba(242,153,74,0.35);border-radius:var(--radius-sm);padding:14px;">
+        <p style="font-size:13px;font-weight:600;color:var(--accent3);margin-bottom:8px;">Gmail permission not yet granted</p>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+          Spendwise needs permission to send emails on your behalf.
+          This is a one-time step done from the Apps Script editor.
+        </p>
+        <ol id="mailPermSteps" style="font-size:12px;color:var(--text2);margin:0 0 12px 16px;line-height:2;"></ol>
+        <a id="mailPermEditorLink" href="https://script.google.com/home" target="_blank"
+          style="display:inline-block;padding:7px 14px;background:var(--accent3);color:#1a1000;border-radius:var(--radius-sm);font-size:12px;font-weight:700;text-decoration:none;">
+          Open Apps Script Editor
+        </a>
+        <span style="font-size:11px;color:var(--text3);display:block;margin-top:8px;">
+          After granting permission, return here and click Save or Send Test again.
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA & SHARDS -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Data &amp; Shards</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div class="card">
+        <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Each month expenses are stored in a separate Google Sheet (shard) for performance.</p>
+        <div id="shardTableWrap">
+          <div class="skeleton" style="height:80px;border-radius:var(--radius-sm);"></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-outline btn-sm" id="exportAllBtn">Export All Data</button>
+          <button class="btn-outline btn-sm" id="rotateShardBtn">Rotate Shard Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>System</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="settings-section-body" style="display:none;" id="systemSectionBody">
+      <div id="systemSetupBanner" class="hidden"
+        style="background:rgba(235,87,87,0.1);border:1px solid rgba(235,87,87,0.3);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;color:var(--danger);font-size:13px;">
+        Spendwise is not configured. Click <strong>SETUP</strong> below to get started.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="sys-card">
+          <div class="sys-card-title">SETUP</div>
+          <div class="sys-card-desc">First-time only. Creates Config and Shard sheets automatically. Disabled once configured.</div>
+          <button class="sys-btn sys-btn-green" id="sysSetupBtn" disabled>
+            <span class="spinner" id="sysSetupSpinner" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></span>
+            <span id="sysSetupBtnText">Checking...</span>
+          </button>
+        </div>
+        <div class="sys-card">
+          <div class="sys-card-title">STATUS</div>
+          <div class="sys-card-desc">Checks all sheets, shards, triggers, and cache state. Run anytime to diagnose issues.</div>
+          <button class="sys-btn" id="sysStatusBtn">Run STATUS</button>
+        </div>
+        <div class="sys-card" style="grid-column:1/-1;">
+          <div class="sys-card-title">REPAIR</div>
+          <div class="sys-card-desc">
+            Safe to run anytime. Clears caches, re-derives active shard, verifies all tabs, reinstalls trigger.
+            <strong style="color:var(--accent3);">No data is modified or deleted.</strong>
+          </div>
+          <button class="sys-btn sys-btn-amber" id="sysRepairBtn" style="max-width:160px;">Run REPAIR</button>
+        </div>
+      </div>
+      <div id="sysConfirmBox" class="hidden"
+        style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;">
+        <p id="sysConfirmMsg" style="font-size:13px;color:var(--text2);margin-bottom:10px;"></p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="sysConfirmInput" class="form-input sm" placeholder="" style="flex:1;" autocomplete="off" />
+          <button class="sys-btn" id="sysConfirmSubmit" disabled>Confirm</button>
+          <button class="btn-outline btn-sm" id="sysConfirmCancel">Cancel</button>
+        </div>
+      </div>
+      <div id="sysOutput" class="hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span id="sysOutputTitle" style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;"></span>
+          <button class="btn-outline btn-sm" id="sysClearOutputBtn">Clear</button>
+        </div>
+        <div id="sysOutputLines"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:'Courier New',monospace;font-size:12px;line-height:1.8;max-height:320px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.settings-section-title.collapsible { cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; }
+.settings-section-title.collapsible:hover { color:var(--text); }
+.chevron { width:18px; height:18px; flex-shrink:0; color:var(--accent); transition:transform 0.2s ease; }
+.settings-section-title.collapsible.open .chevron { transform:rotate(180deg); }
+.toggle-switch { display:flex; align-items:center; cursor:pointer; }
+.toggle-track { width:40px; height:22px; background:var(--bg3); border-radius:11px; border:1px solid var(--border); position:relative; transition:var(--transition); }
+.toggle-switch input { display:none; }
+.toggle-switch input:checked + .toggle-track { background:var(--accent2); border-color:var(--accent2); }
+.toggle-thumb { position:absolute; top:2px; left:2px; width:16px; height:16px; background:#fff; border-radius:50%; transition:transform 0.2s ease; }
+.toggle-switch input:checked + .toggle-track .toggle-thumb { transform:translateX(18px); }
+.sys-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; display:flex; flex-direction:column; gap:8px; }
+.sys-card-title { font-family:'DM Serif Display',serif; font-size:15px; color:var(--text); }
+.sys-card-desc { font-size:12px; color:var(--text3); line-height:1.5; flex:1; }
+.sys-btn { padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg3); color:var(--text); font-size:12px; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; transition:var(--transition); text-align:center; }
+.sys-btn:hover:not(:disabled) { background:var(--bg); border-color:var(--accent); color:var(--accent); }
+.sys-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.sys-btn-green { border-color:rgba(111,207,151,0.4); color:var(--accent2); }
+.sys-btn-green:hover:not(:disabled) { background:rgba(111,207,151,0.1); border-color:var(--accent2); }
+.sys-btn-green:disabled { opacity:0.35; }
+.sys-btn-amber { border-color:rgba(242,153,74,0.4); color:var(--accent3); }
+.sys-btn-amber:hover:not(:disabled) { background:rgba(242,153,74,0.1); border-color:var(--accent3); }
+.sys-line-ok      { color:var(--accent2); }
+.sys-line-error   { color:var(--danger); }
+.sys-line-warn    { color:var(--accent3); }
+.sys-line-info    { color:var(--text2); }
+.sys-line-heading { color:var(--text); font-weight:700; margin-top:6px; }
+</style>
+
+<script>
+// ============================================================
+// PAGE: SETTINGS
+// ============================================================
+
+let _settingsInitialized = false;
+let _settingsData        = null;
+let _sysPendingAction    = null;
+
+function initSettings() {
+  if (_settingsInitialized) return;
+  _settingsInitialized = true;
+  _wireCollapsibles();
+  _wireAllListeners();
+  _loadSettings();
+  _sysCheckSetupState();
+}
+
+function refreshSettings() { _loadSettings(); showToast('Refreshing...', 'info'); }
+
+// ── Collapsibles — event delegation on all [data-toggle] headers ──
+function _wireCollapsibles() {
+  document.querySelectorAll('.settings-section-title[data-toggle]').forEach(function(title) {
+    title.addEventListener('click', function() {
+      var body = this.nextElementSibling;
+      if (!body) return;
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      this.classList.toggle('open', !open);
+    });
+  });
+}
+
+// ── Wire every button/input listener here — no inline onclick ──
+function _wireAllListeners() {
+
+  // Categories
+  document.getElementById('addCatBtn').addEventListener('click', function() {
+    var list = document.getElementById('catEditorList');
+    var div  = document.createElement('div');
+    div.className = 'cat-editor-row';
+    div.innerHTML = '<input class="cat-editor-icon-input" type="text" value="📦" data-field="icon" maxlength="4" />' +
+      '<input class="form-input sm cat-editor-name" type="text" value="" data-field="name" placeholder="Category name" />' +
+      '<input class="form-input sm cat-editor-budget" type="number" value="0" data-field="budget" placeholder="Budget" min="0" />' +
+      '<button class="cat-editor-del" title="Remove">✕</button>';
+    div.querySelector('.cat-editor-del').addEventListener('click', function() { this.closest('.cat-editor-row').remove(); });
+    list.appendChild(div);
+    div.querySelector('.cat-editor-name').focus();
+  });
+
+  document.getElementById('saveCatsBtn').addEventListener('click', function() {
+    var cats = _getCatEditorValues();
+    if (!cats.length) return showToast('Add at least one category', 'error');
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving...';
+    google.script.run
+      .withSuccessHandler(function(r) { btn.disabled = false; btn.textContent = 'Save Categories'; showToast(r.success ? 'Categories saved!' : 'Save failed', r.success ? 'success' : 'error'); })
+      .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Save Categories'; showToast('Save failed', 'error'); })
+      .saveCategories(cats);
+  });
+
+  // General settings
+  document.getElementById('saveSettingsBtn').addEventListener('click', function() {
+    var settings = {
+      currency:       document.getElementById('setCurrency').value.trim() || '₹',
+      defaultPayment: document.getElementById('setDefaultPayment').value,
+      weekStartDay:   document.getElementById('setWeekStart').value
+    };
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving...';
+    google.script.run
+      .withSuccessHandler(function(r) {
+        btn.disabled = false; btn.textContent = 'Save Settings';
+        showToast(r.success ? 'Settings saved!' : 'Save failed', r.success ? 'success' : 'error');
+        if (r.success) _loadAppCurrency(settings);
+      })
+      .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Save Settings'; showToast('Save failed', 'error'); })
+      .saveSettings(settings);
+  });
+
+  // Report toggle opacity
+  document.getElementById('setReportEnabled').addEventListener('change', function() {
+    document.getElementById('reportOptions').style.opacity = this.checked ? '1' : '0.4';
+    document.getElementById('mailPermBanner').classList.add('hidden');
+    if (this.checked) _checkMailPerm(false);
+  });
+
+  // Save report settings
+  document.getElementById('saveReportBtn').addEventListener('click', function() {
+    var settings = {
+      weeklyReportEnabled: document.getElementById('setReportEnabled').checked ? 'true' : 'false',
+      weeklyReportEmail:   document.getElementById('setReportEmail').value.trim(),
+      weeklyReportDay:     document.getElementById('setReportDay').value,
+      weeklyReportTime:    document.getElementById('setReportTime').value
+    };
+    if (settings.weeklyReportEnabled === 'true' && !settings.weeklyReportEmail) return showToast('Enter an email address', 'error');
+    var btn = this;
+    if (settings.weeklyReportEnabled === 'true') {
+      btn.disabled = true; btn.textContent = 'Checking permission...';
+      google.script.run
+        .withSuccessHandler(function(r) {
+          if (!r.granted) {
+            btn.disabled = false; btn.textContent = 'Save Report Settings';
+            _showMailPermBanner(r.instructions);
+            showToast('Grant Gmail permission first', 'error');
+            return;
+          }
+          _doSaveReport(settings, btn);
+        })
+        .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Save Report Settings'; })
+        .checkMailPermission();
+    } else {
+      _doSaveReport(settings, btn);
+    }
+  });
+
+  // Send test email
+  document.getElementById('testReportBtn').addEventListener('click', function() {
+    var email = document.getElementById('setReportEmail').value.trim();
+    if (!email) return showToast('Enter an email address first', 'error');
+    var btn = this; btn.disabled = true; btn.textContent = 'Checking...';
+    google.script.run
+      .withSuccessHandler(function(r) {
+        if (!r.granted) {
+          btn.disabled = false; btn.textContent = 'Send Test Email';
+          _showMailPermBanner(r.instructions);
+          showToast('Grant Gmail permission first', 'error');
+          return;
+        }
+        btn.textContent = 'Sending...';
+        google.script.run
+          .withSuccessHandler(function(r2) {
+            btn.disabled = false; btn.textContent = 'Send Test Email';
+            showToast(r2.success ? 'Test email sent!' : ('Failed: ' + (r2.message || '')), r2.success ? 'success' : 'error');
+          })
+          .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Send Test Email'; showToast('Send failed', 'error'); })
+          .sendTestReport();
+      })
+      .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Send Test Email'; })
+      .checkMailPermission();
+  });
+
+  // Data & Shards
+  document.getElementById('exportAllBtn').addEventListener('click', function() {
+    showToast('Preparing full export...', 'info');
+    google.script.run
+      .withSuccessHandler(function(csv) {
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href = url; a.download = 'spendwise_all_' + todayStr() + '.csv'; a.click();
+        URL.revokeObjectURL(url);
+        showToast('Export downloaded!', 'success');
+      })
+      .withFailureHandler(function() { showToast('Export failed', 'error'); })
+      .exportToCSV({});
+  });
+
+  document.getElementById('rotateShardBtn').addEventListener('click', function() {
+    if (!confirm('Create a new shard for this month? Only do this if auto-rotation missed.')) return;
+    var btn = this; btn.disabled = true; btn.textContent = 'Creating...';
+    google.script.run
+      .withSuccessHandler(function(r) {
+        btn.disabled = false; btn.textContent = 'Rotate Shard Now';
+        if (r.success) { showToast('New shard created: ' + r.month, 'success'); _loadSettings(); }
+        else if (r.skipped) showToast('Shard for this month already exists', 'info');
+      })
+      .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Rotate Shard Now'; showToast('Rotation failed', 'error'); })
+      .rotateShardForNewMonth();
+  });
+
+  // System buttons
+  document.getElementById('sysSetupBtn').addEventListener('click', function() { _sysRunSetup(); });
+  document.getElementById('sysStatusBtn').addEventListener('click', function() { _sysRunStatus(); });
+  document.getElementById('sysRepairBtn').addEventListener('click', function() { _sysShowConfirm(); });
+  document.getElementById('sysConfirmSubmit').addEventListener('click', function() { _sysConfirmSubmit(); });
+  document.getElementById('sysConfirmCancel').addEventListener('click', function() { _sysHideConfirm(); });
+  document.getElementById('sysClearOutputBtn').addEventListener('click', function() { _sysClearOutput(); });
+  document.getElementById('sysConfirmInput').addEventListener('input', function() {
+    document.getElementById('sysConfirmSubmit').disabled = this.value.trim() !== 'REPAIR';
+  });
+}
+
+// ── Data loading ──────────────────────────────────────────────
+function _loadSettings() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (!data) return showToast('Settings returned no data', 'error');
+      _settingsData = data;
+      _loadAppCurrency(data.settings);
+      _renderCatEditor(data.categories || []);
+      _renderGeneralSettings(data.settings || {});
+      _renderReportSettings(data.settings || {});
+      _renderShardInfo(data.shardInfo || {});
+    })
+    .withFailureHandler(function() { showToast('Failed to load settings', 'error'); })
+    .getSettingsPageData();
+}
+
+// ── Category editor ───────────────────────────────────────────
+function _renderCatEditor(cats) {
+  var html = '';
+  for (var i = 0; i < cats.length; i++) {
+    var c = cats[i];
+    html += '<div class="cat-editor-row" data-idx="' + i + '">' +
+      '<input class="cat-editor-icon-input" type="text" value="' + esc(c.icon) + '" data-field="icon" maxlength="4" title="Emoji icon" />' +
+      '<input class="form-input sm cat-editor-name" type="text" value="' + esc(c.name) + '" data-field="name" placeholder="Category name" />' +
+      '<input class="form-input sm cat-editor-budget" type="number" value="' + c.budget + '" data-field="budget" placeholder="Budget" min="0" step="1" />' +
+      '<button class="cat-editor-del" title="Remove">✕</button>' +
+      '</div>';
+  }
+  document.getElementById('catEditorList').innerHTML = html;
+  // Wire delete buttons
+  document.querySelectorAll('.cat-editor-del').forEach(function(btn) {
+    btn.addEventListener('click', function() { this.closest('.cat-editor-row').remove(); });
+  });
+}
+
+function _getCatEditorValues() {
+  var rows = document.querySelectorAll('.cat-editor-row');
+  var cats = [];
+  rows.forEach(function(row) {
+    var name = row.querySelector('[data-field="name"]').value.trim();
+    if (name) cats.push({
+      icon:   row.querySelector('[data-field="icon"]').value.trim() || '📦',
+      name:   name,
+      budget: parseFloat(row.querySelector('[data-field="budget"]').value) || 0
+    });
+  });
+  return cats;
+}
+
+// ── General settings ──────────────────────────────────────────
+function _renderGeneralSettings(settings) {
+  document.getElementById('setCurrency').value = settings.currency || '₹';
+  document.getElementById('setDefaultPayment').innerHTML = buildPaymentOptions(settings.defaultPayment || 'UPI');
+  document.getElementById('setWeekStart').value = settings.weekStartDay || 'Monday';
+}
+
+// ── Report settings ───────────────────────────────────────────
+function _renderReportSettings(settings) {
+  var enabled = settings.weeklyReportEnabled === 'true';
+  document.getElementById('setReportEnabled').checked    = enabled;
+  document.getElementById('setReportEmail').value        = settings.weeklyReportEmail || '';
+  document.getElementById('setReportDay').value          = settings.weeklyReportDay   || 'Monday';
+  document.getElementById('setReportTime').value         = settings.weeklyReportTime  || '8';
+  document.getElementById('reportOptions').style.opacity = enabled ? '1' : '0.4';
+  if (enabled) _checkMailPerm(false);
+}
+
+function _doSaveReport(settings, btn) {
+  btn.disabled = true; btn.textContent = 'Saving...';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Save Report Settings';
+      showToast(r.success ? 'Report settings saved!' : 'Save failed', r.success ? 'success' : 'error');
+    })
+    .withFailureHandler(function() { btn.disabled = false; btn.textContent = 'Save Report Settings'; showToast('Save failed', 'error'); })
+    .saveSettingsWithReport(settings);
+}
+
+function _checkMailPerm(showOkToast) {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r.granted) {
+        document.getElementById('mailPermBanner').classList.add('hidden');
+        if (showOkToast) showToast('Gmail permission granted', 'success');
+      } else {
+        _showMailPermBanner(r.instructions);
+      }
+    })
+    .withFailureHandler(function() {})
+    .checkMailPermission();
+}
+
+function _showMailPermBanner(instructions) {
+  var banner = document.getElementById('mailPermBanner');
+  var steps  = document.getElementById('mailPermSteps');
+  steps.innerHTML = (instructions || []).map(function(s) { return '<li>' + s + '</li>'; }).join('');
+  banner.classList.remove('hidden');
+  banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Shard info ────────────────────────────────────────────────
+function _renderShardInfo(info) {
+  var shards = (info.shards || []).slice().sort(function(a, b) { return (b.month || '').localeCompare(a.month || ''); });
+  var rows = shards.map(function(s) {
+    return '<tr><td>' + esc(s.label || 'Shard') + '</td><td>' + esc(s.month || 'Unknown') + '</td><td>' +
+      (s.id === info.activeShardId ? '<span class="shard-active-badge">Active</span>' : '<span style="color:var(--text3);font-size:11px;">Archive</span>') +
+      '</td></tr>';
+  }).join('');
+  document.getElementById('shardTableWrap').innerHTML =
+    '<table class="shard-table"><thead><tr><th>Shard</th><th>Month</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p style="margin-top:8px;color:var(--text3);font-size:11px;">' + (info.totalShards || 1) + ' shard' + ((info.totalShards || 1) !== 1 ? 's' : '') + ' total</p>';
+}
+
+// ── System section ────────────────────────────────────────────
+function _sysCheckSetupState() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      var setupBtn     = document.getElementById('sysSetupBtn');
+      var setupSpinner = document.getElementById('sysSetupSpinner');
+      var setupText    = document.getElementById('sysSetupBtnText');
+      var banner       = document.getElementById('systemSetupBanner');
+      setupSpinner.style.display = 'none';
+      if (result.isSetUp) {
+        setupBtn.disabled = true; setupText.textContent = 'Already Configured';
+        banner.classList.add('hidden');
+      } else {
+        setupBtn.disabled = false; setupText.textContent = 'Run SETUP';
+        banner.classList.remove('hidden');
+        var sysBody = document.getElementById('systemSectionBody');
+        if (sysBody) {
+          sysBody.style.display = '';
+          var sysTitle = sysBody.previousElementSibling;
+          if (sysTitle) sysTitle.classList.add('open');
+        }
+      }
+    })
+    .withFailureHandler(function() {
+      document.getElementById('sysSetupSpinner').style.display = 'none';
+      document.getElementById('sysSetupBtnText').textContent = 'Run SETUP';
+      document.getElementById('sysSetupBtn').disabled = false;
+    })
+    .getSystemStatus();
+}
+
+function _sysShowOutput(title, lines) {
+  document.getElementById('sysOutputTitle').textContent = title;
+  document.getElementById('sysOutputLines').innerHTML = lines.map(function(l) {
+    var cls    = 'sys-line-' + (l.type || 'info');
+    var prefix = l.type === 'ok' ? '✓ ' : l.type === 'error' ? '✗ ' : l.type === 'warn' ? '⚠ ' : l.type === 'heading' ? '── ' : '  ';
+    return '<div class="' + cls + '">' + prefix + l.text + '</div>';
+  }).join('');
+  document.getElementById('sysOutput').classList.remove('hidden');
+  document.getElementById('sysOutput').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function _sysClearOutput() {
+  document.getElementById('sysOutput').classList.add('hidden');
+  document.getElementById('sysOutputLines').innerHTML = '';
+}
+
+function _sysSetLoading(btnId, loading) {
+  var btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn.dataset.orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+  } else {
+    btn.disabled = false;
+    btn.textContent = btn.dataset.orig || btn.textContent;
+  }
+}
+
+function _sysRunSetup() {
+  if (!confirm('This will create a new Config Sheet and Shard Sheet in your Google Drive.\n\nContinue?')) return;
+  _sysClearOutput();
+  var setupBtn = document.getElementById('sysSetupBtn');
+  var spinner  = document.getElementById('sysSetupSpinner');
+  var txt      = document.getElementById('sysSetupBtnText');
+  setupBtn.disabled = true; spinner.style.display = 'inline-block'; txt.textContent = 'Running...';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      spinner.style.display = 'none';
+      _sysShowOutput('SETUP', r.lines || []);
+      if (r.success || r.alreadySetUp) {
+        setupBtn.disabled = true; txt.textContent = 'Already Configured';
+        document.getElementById('systemSetupBanner').classList.add('hidden');
+        if (r.success) { showToast('Setup complete!', 'success'); _loadSettings(); }
+      } else {
+        setupBtn.disabled = false; txt.textContent = 'Run SETUP';
+        showToast('Setup failed — see output', 'error');
+      }
+    })
+    .withFailureHandler(function(e) {
+      spinner.style.display = 'none'; setupBtn.disabled = false; txt.textContent = 'Run SETUP';
+      _sysShowOutput('SETUP', [{ type: 'error', text: e && e.message ? e.message : 'Unknown error' }]);
+    })
+    .runSetup();
+}
+
+function _sysRunStatus() {
+  _sysClearOutput(); _sysSetLoading('sysStatusBtn', true);
+  google.script.run
+    .withSuccessHandler(function(r) { _sysSetLoading('sysStatusBtn', false); _sysShowOutput('STATUS', r.lines || []); })
+    .withFailureHandler(function(e) { _sysSetLoading('sysStatusBtn', false); _sysShowOutput('STATUS', [{ type: 'error', text: e && e.message ? e.message : 'error' }]); })
+    .getSystemStatus();
+}
+
+function _sysShowConfirm() {
+  _sysPendingAction = 'repair';
+  _sysClearOutput();
+  document.getElementById('sysConfirmMsg').innerHTML =
+    '<strong style="color:var(--accent3);">REPAIR</strong> runs all recovery operations. ' +
+    '<strong>No data is deleted.</strong><br><br>Type <strong>REPAIR</strong> to confirm.';
+  document.getElementById('sysConfirmInput').value = '';
+  document.getElementById('sysConfirmInput').placeholder = 'Type REPAIR to confirm';
+  document.getElementById('sysConfirmSubmit').disabled = true;
+  document.getElementById('sysConfirmBox').classList.remove('hidden');
+  document.getElementById('sysConfirmInput').focus();
+}
+
+function _sysHideConfirm() {
+  document.getElementById('sysConfirmBox').classList.add('hidden');
+  document.getElementById('sysConfirmInput').value = '';
+  _sysPendingAction = null;
+}
+
+function _sysConfirmSubmit() {
+  if (document.getElementById('sysConfirmInput').value.trim() !== 'REPAIR') return;
+  _sysHideConfirm();
+  _sysSetLoading('sysRepairBtn', true);
+  google.script.run
+    .withSuccessHandler(function(r) {
+      _sysSetLoading('sysRepairBtn', false);
+      _sysShowOutput('REPAIR', r.lines || []);
+      showToast(r.success ? 'Repair complete!' : 'Repair had warnings', r.success ? 'success' : 'error');
+    })
+    .withFailureHandler(function(e) {
+      _sysSetLoading('sysRepairBtn', false);
+      _sysShowOutput('REPAIR', [{ type: 'error', text: e && e.message ? e.message : 'error' }]);
+    })
+    .runRepair();
+}
+</script>

@@ -29,16 +29,22 @@ The interface is a fast single-page app. The backend is pure Apps Script. All ex
 - Edit and delete any entry inline
 - Persistent category grid with emoji icons and custom monthly budgets
 
+![Expense Form](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/add_expense.png)
+
 **Dashboard**
 - Monthly spend total, average per day, top category at a glance
 - Budget progress bars per category — color coded by percentage used
 - 5 most recent transactions
+
+![Dashboard-Budget](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/budgets.png)
 
 **Analytics**
 - 7 period presets: This Week, This Month, Last 30 Days, Quarter, Half Year, This Year, Last 12 Months
 - Category breakdown with percentage of total
 - Monthly comparison table — spend per category per month, with income and savings columns
 - Spending trends chart
+
+![Charts](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/analytics.png)
 
 **Income tracking**
 - Log income with categories (Salary, Bonus, Miscellaneous)

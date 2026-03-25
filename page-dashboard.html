@@ -203,7 +203,7 @@
         const rem = b.budget - b.spent;
         return `<div class="budget-card">
           <div class="budget-top">
-            <div class="budget-cat-name">${b.icon} ${esc(b.category)}</div>
+            <div class="budget-cat-name">${_phIcon(b.icon)} ${esc(b.category)}</div>
             <span class="budget-pct-badge ${cls}">${b.percentage}%</span>
           </div>
           <div class="budget-amounts"><span>Spent</span><span>Budget</span></div>
@@ -221,10 +221,10 @@
     cats.forEach(c => catMap[c.name] = c.icon);
 
     document.getElementById('dashRecentList').innerHTML = expenses.length === 0
-      ? `<div class="empty-state"><div class="empty-icon">💸</div><p>No expenses yet</p><small>Tap + to get started</small></div>`
+      ? `<div class="empty-state"><div class="empty-icon"><i class="ph ph-money"></i></div><p>No expenses yet</p><small>Tap + to get started</small></div>`
       : expenses.map(e => `
       <div class="expense-item">
-        <div class="expense-icon">${catMap[e.category] || '📦'}</div>
+        <div class="expense-icon">${_phIcon(catMap[e.category] || 'package')}</div>
         <div class="expense-info">
           <div class="expense-desc">${esc(e.description)}</div>
           <div class="expense-meta">

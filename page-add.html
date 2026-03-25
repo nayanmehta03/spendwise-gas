@@ -10,8 +10,8 @@
         <label>Amount *</label>
         <div class="amount-input-wrap">
           <span class="currency-symbol">₹</span>
-          <input type="number" id="expAmount" placeholder="0.00" step="0.01" min="0"
-            class="amount-input" inputmode="decimal" />
+          <input type="number" id="expAmount" placeholder="0.00" step="0.01" min="0" class="amount-input"
+            inputmode="decimal" />
         </div>
       </div>
       <div class="form-group">
@@ -27,8 +27,8 @@
 
     <div class="form-group">
       <label>Description *</label>
-      <input type="text" id="expDescription" placeholder="What did you spend on?"
-        class="form-input" autocomplete="off" />
+      <input type="text" id="expDescription" placeholder="What did you spend on?" class="form-input"
+        autocomplete="off" />
     </div>
 
     <div class="form-row">
@@ -50,131 +50,131 @@
 </div>
 
 <script>
-// ============================================================
-// PAGE: ADD EXPENSE
-// Zero-wait: renders default categories immediately.
-// Real categories + settings load in background.
-// ============================================================
+  // ============================================================
+  // PAGE: ADD EXPENSE
+  // Zero-wait: renders default categories immediately.
+  // Real categories + settings load in background.
+  // ============================================================
 
-const _ADD_DEFAULTS = [
-  { name: 'Food & Drink',       icon: '🍔' },
-  { name: 'Groceries',          icon: '🛒' },
-  { name: 'Transport',          icon: '🚗' },
-  { name: 'Shopping',           icon: '🛍️' },
-  { name: 'Health & Wellbeing', icon: '💊' },
-  { name: 'Entertainment',      icon: '🎬' },
-  { name: 'Subscriptions',      icon: '📱' },
-  { name: 'Bills',              icon: '💡' },
-  { name: 'Rent',               icon: '🏠' },
-  { name: 'Travel',             icon: '✈️' },
-  { name: 'Gifts',              icon: '🎁' },
-  { name: 'Investment',         icon: '📈' },
-  { name: 'Business',           icon: '💼' },
-  { name: 'Other',              icon: '📦' },
-];
+  const _ADD_DEFAULTS = [
+    { name: 'Food & Drink', icon: 'fork-knife' },
+    { name: 'Groceries', icon: 'shopping-cart' },
+    { name: 'Transport', icon: 'car' },
+    { name: 'Shopping', icon: 'tote' },
+    { name: 'Health & Wellbeing', icon: 'heartbeat' },
+    { name: 'Entertainment', icon: 'film-strip' },
+    { name: 'Subscriptions', icon: 'device-mobile' },
+    { name: 'Bills', icon: 'lightbulb' },
+    { name: 'Rent', icon: 'house' },
+    { name: 'Travel', icon: 'airplane' },
+    { name: 'Gifts', icon: 'gift' },
+    { name: 'Investment', icon: 'trend-up' },
+    { name: 'Business', icon: 'briefcase' },
+    { name: 'Other', icon: 'package' },
+  ];
 
-let _addCategories = _ADD_DEFAULTS;
-let _addSelectedCat = null;
-let _addInitialized = false;
+  let _addCategories = _ADD_DEFAULTS;
+  let _addSelectedCat = null;
+  let _addInitialized = false;
 
-function initAdd() {
-  if (_addInitialized) return;
-  _addInitialized = true;
+  function initAdd() {
+    if (_addInitialized) return;
+    _addInitialized = true;
 
-  document.getElementById('expDate').value = todayStr();
-  document.getElementById('expPayment').innerHTML = buildPaymentOptions('UPI');
-  _renderCategoryGrid(_ADD_DEFAULTS); // immediate, no wait
+    document.getElementById('expDate').value = todayStr();
+    document.getElementById('expPayment').innerHTML = buildPaymentOptions('UPI');
+    _renderCategoryGrid(_ADD_DEFAULTS); // immediate, no wait
 
-  // Background load of real categories + settings
-  google.script.run
-    .withSuccessHandler(data => {
-      _addCategories = data.categories || _ADD_DEFAULTS;
-      _renderCategoryGrid(_addCategories);
-      if (data.settings) {
-        _loadAppCurrency(data.settings); // wire currency globally
-        if (data.settings.defaultPayment) {
-          document.getElementById('expPayment').value = data.settings.defaultPayment;
+    // Background load of real categories + settings
+    google.script.run
+      .withSuccessHandler(data => {
+        _addCategories = data.categories || _ADD_DEFAULTS;
+        _renderCategoryGrid(_addCategories);
+        if (data.settings) {
+          _loadAppCurrency(data.settings); // wire currency globally
+          if (data.settings.defaultPayment) {
+            document.getElementById('expPayment').value = data.settings.defaultPayment;
+          }
         }
-      }
-    })
-    .withFailureHandler(() => {}) // silently keep defaults
-    .getAddPageData();
+      })
+      .withFailureHandler(() => { }) // silently keep defaults
+      .getAddPageData();
 
-  document.getElementById('submitExpense').addEventListener('click', _submitAdd);
-}
+    document.getElementById('submitExpense').addEventListener('click', _submitAdd);
+  }
 
-function refreshAdd() {
-  google.script.run
-    .withSuccessHandler(data => {
-      _addCategories = data.categories || _ADD_DEFAULTS;
-      _renderCategoryGrid(_addCategories);
-      showToast('Categories refreshed', 'info');
-    })
-    .getAddPageData();
-}
+  function refreshAdd() {
+    google.script.run
+      .withSuccessHandler(data => {
+        _addCategories = data.categories || _ADD_DEFAULTS;
+        _renderCategoryGrid(_addCategories);
+        showToast('Categories refreshed', 'info');
+      })
+      .getAddPageData();
+  }
 
-function _renderCategoryGrid(cats) {
-  document.getElementById('categoryGrid').innerHTML = cats.map(c => `
+  function _renderCategoryGrid(cats) {
+    document.getElementById('categoryGrid').innerHTML = cats.map(c => `
     <button class="cat-btn${_addSelectedCat === c.name ? ' selected' : ''}"
       data-cat="${esc(c.name)}" onclick="_selectAddCategory('${esc(c.name)}')">
-      <span class="cat-emoji">${c.icon}</span>
+      <span class="cat-emoji">${_phIcon(c.icon)}</span>
       <span>${esc(c.name)}</span>
     </button>`).join('');
-}
+  }
 
-function _selectAddCategory(name) {
-  _addSelectedCat = name;
-  document.querySelectorAll('#categoryGrid .cat-btn').forEach(b => {
-    b.classList.toggle('selected', b.dataset.cat === name);
-  });
-}
-
-function _submitAdd() {
-  const amount = parseFloat(document.getElementById('expAmount').value);
-  const date   = document.getElementById('expDate').value;
-  const desc   = document.getElementById('expDescription').value.trim();
-
-  if (!amount || amount <= 0) return showToast('Enter a valid amount', 'error');
-  if (!date)                   return showToast('Select a date', 'error');
-  if (!desc)                   return showToast('Add a description', 'error');
-  if (!_addSelectedCat)        return showToast('Select a category', 'error');
-
-  document.getElementById('submitText').classList.add('hidden');
-  document.getElementById('submitSpinner').classList.remove('hidden');
-  document.getElementById('submitExpense').disabled = true;
-
-  google.script.run
-    .withSuccessHandler(r => {
-      document.getElementById('submitText').classList.remove('hidden');
-      document.getElementById('submitSpinner').classList.add('hidden');
-      document.getElementById('submitExpense').disabled = false;
-
-      if (r.success) {
-        showToast('Expense saved! ✓', 'success');
-        document.getElementById('expAmount').value      = '';
-        document.getElementById('expDescription').value = '';
-        document.getElementById('expNotes').value       = '';
-        document.getElementById('expDate').value        = todayStr();
-        _addSelectedCat = null;
-        document.querySelectorAll('#categoryGrid .cat-btn').forEach(b => b.classList.remove('selected'));
-        document.getElementById('expAmount').focus();
-      } else {
-        showToast('Error: ' + (r.message || 'Unknown'), 'error');
-      }
-    })
-    .withFailureHandler(() => {
-      document.getElementById('submitText').classList.remove('hidden');
-      document.getElementById('submitSpinner').classList.add('hidden');
-      document.getElementById('submitExpense').disabled = false;
-      showToast('Failed to save. Try again.', 'error');
-    })
-    .addExpense({
-      amount:        amount,
-      date:          date,
-      description:   desc,
-      category:      _addSelectedCat,
-      paymentMethod: document.getElementById('expPayment').value,
-      notes:         document.getElementById('expNotes').value.trim()
+  function _selectAddCategory(name) {
+    _addSelectedCat = name;
+    document.querySelectorAll('#categoryGrid .cat-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.cat === name);
     });
-}
+  }
+
+  function _submitAdd() {
+    const amount = parseFloat(document.getElementById('expAmount').value);
+    const date = document.getElementById('expDate').value;
+    const desc = document.getElementById('expDescription').value.trim();
+
+    if (!amount || amount <= 0) return showToast('Enter a valid amount', 'error');
+    if (!date) return showToast('Select a date', 'error');
+    if (!desc) return showToast('Add a description', 'error');
+    if (!_addSelectedCat) return showToast('Select a category', 'error');
+
+    document.getElementById('submitText').classList.add('hidden');
+    document.getElementById('submitSpinner').classList.remove('hidden');
+    document.getElementById('submitExpense').disabled = true;
+
+    google.script.run
+      .withSuccessHandler(r => {
+        document.getElementById('submitText').classList.remove('hidden');
+        document.getElementById('submitSpinner').classList.add('hidden');
+        document.getElementById('submitExpense').disabled = false;
+
+        if (r.success) {
+          showToast('Expense saved! ✓', 'success');
+          document.getElementById('expAmount').value = '';
+          document.getElementById('expDescription').value = '';
+          document.getElementById('expNotes').value = '';
+          document.getElementById('expDate').value = todayStr();
+          _addSelectedCat = null;
+          document.querySelectorAll('#categoryGrid .cat-btn').forEach(b => b.classList.remove('selected'));
+          document.getElementById('expAmount').focus();
+        } else {
+          showToast('Error: ' + (r.message || 'Unknown'), 'error');
+        }
+      })
+      .withFailureHandler(() => {
+        document.getElementById('submitText').classList.remove('hidden');
+        document.getElementById('submitSpinner').classList.add('hidden');
+        document.getElementById('submitExpense').disabled = false;
+        showToast('Failed to save. Try again.', 'error');
+      })
+      .addExpense({
+        amount: amount,
+        date: date,
+        description: desc,
+        category: _addSelectedCat,
+        paymentMethod: document.getElementById('expPayment').value,
+        notes: document.getElementById('expNotes').value.trim()
+      });
+  }
 </script>

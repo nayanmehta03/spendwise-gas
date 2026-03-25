@@ -55,14 +55,33 @@
 
   // ── Payment methods — single source of truth ─────────────────
   const PAYMENT_METHODS = [
-    { value: 'Auto-debit', label: '🔄 Auto-debit' },
-    { value: 'Cash', label: '💵 Cash' },
-    { value: 'UPI', label: '📱 UPI' },
-    { value: 'Credit Card', label: '💳 Credit Card' },
-    { value: 'Debit Card', label: '💳 Debit Card' },
-    { value: 'Bank Transfer', label: '🏦 Bank Transfer' },
-    { value: 'Wallet', label: '👛 Wallet' },
+    { value: 'Auto-debit', label: '<i class="ph-duotone ph-arrows-clockwise"></i> Auto-debit' },
+    { value: 'Cash', label: '<i class="ph-duotone ph-money"></i> Cash' },
+    { value: 'UPI', label: '<i class="ph-duotone ph-device-mobile"></i> UPI' },
+    { value: 'Credit Card', label: '<i class="ph-duotone ph-credit-card"></i> Credit Card' },
+    { value: 'Debit Card', label: '<i class="ph-duotone ph-credit-card"></i> Debit Card' },
+    { value: 'Bank Transfer', label: '<i class="ph-duotone ph-bank"></i> Bank Transfer' },
+    { value: 'Wallet', label: '<i class="ph-duotone ph-wallet"></i> Wallet' },
   ];
+
+  // ── Phosphor Icon helper (Duotone + Deterministic Color) ──
+  const _ICON_COLORS = [
+    '#4F8EF7', '#F2994A', '#27AE60', '#EB5757', '#9B51E0',
+    '#2D9CDB', '#F2C94C', '#2196F3', '#E91E63', '#00BCD4',
+    '#8BC34A', '#FF9800', '#673AB7', '#009688', '#FF5722'
+  ];
+  function _getIconColor(str) {
+    if (!str) return '#888888';
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    return _ICON_COLORS[Math.abs(hash) % _ICON_COLORS.length];
+  }
+
+  // Accepts an icon name, auto-assigns a vibrant color, falls back to package
+  function _phIcon(name) {
+    if (!name || /[^\x20-\x7E]/.test(name)) return '<i class="ph-duotone ph-package" style="color:#888;"></i>';
+    return `<i class="ph-duotone ph-${name}" style="color:${_getIconColor(name)}"></i>`;
+  }
   function buildPaymentOptions(selected) {
     return PAYMENT_METHODS.map(m =>
       `<option value="${m.value}"${m.value === selected ? ' selected' : ''}>${m.label}</option>`

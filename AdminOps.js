@@ -61,7 +61,7 @@ function SETUP() {
     log.push('✓ First shard (' + month + '): ' + shardSS.getUrl());
     _initConfigSheet(shardId);
     _ensureShardSheet(shardSS);
-    log.push('✓ All tabs seeded (Categories, ShardRegistry, Settings, Income, Expenses)');
+    log.push('✓ All tabs seeded (Categories, ShardRegistry, Settings, Income, StandingInstructions, Expenses)');
   } catch (e) {
     log.push('✗ Failed to create shard sheet: ' + e.message);
     Logger.log(log.join('\n'));
@@ -154,7 +154,7 @@ function STATUS() {
     const tabs = ss.getSheets().map(s => s.getName());
     log.push('  ✓ Accessible: ' + ss.getName());
     log.push('  Tabs found   : ' + tabs.join(', '));
-    ['Categories', 'ShardRegistry', 'Settings', 'Income'].forEach(t => {
+    ['Categories', 'ShardRegistry', 'Settings', 'Income', 'StandingInstructions'].forEach(t => {
       log.push('  ' + (tabs.includes(t) ? '✓' : '✗ MISSING') + ' ' + t + ' tab');
     });
   } catch (e) {

@@ -334,19 +334,19 @@
       allCats.map(c => c.amount),
       CHART_COLORS.slice(0, allCats.length)
     );
+    const catIconMap = {};
+    _analyticsCategories.forEach(c => catIconMap[c.name] = c.icon);
+
     document.getElementById('aDonutLegend').innerHTML = allCats.map((c, i) =>
       `<div class="legend-item">
       <div class="legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></div>
-      <span class="legend-label">${esc(c.category)}</span>
+      <span class="legend-label">${_phIcon(catIconMap[c.category] || 'package')} ${esc(c.category)}</span>
       <span class="legend-val">${fmt(c.amount)}</span>
     </div>`).join('');
-
-    const catIconMap = {};
-    _analyticsCategories.forEach(c => catIconMap[c.name] = c.icon);
     document.getElementById('aCategoryBreakdown').innerHTML = (a.topCategories || []).map((c, i) =>
       `<div class="breakdown-item">
       <div class="breakdown-header">
-        <span class="breakdown-label">${catIconMap[c.category] || '📦'} ${esc(c.category)}</span>
+        <span class="breakdown-label">${_phIcon(catIconMap[c.category] || 'package')} ${esc(c.category)}</span>
         <div class="breakdown-values"><span class="breakdown-pct">${c.percentage}%</span><span class="breakdown-amt">${fmt(c.amount)}</span></div>
       </div>
       <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${c.percentage}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"></div></div>

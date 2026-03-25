@@ -428,7 +428,7 @@
 
         if (!items.length) {
             document.getElementById('siUpcomingList').innerHTML =
-                '<div class="empty-state"><div class="empty-icon">📅</div><p>No recurring items this month</p><small>Add your first standing instruction below</small></div>';
+                '<div class="empty-state"><div class="empty-icon"><i class="ph ph-calendar-blank"></i></div><p>No recurring items this month</p><small>Add your first standing instruction below</small></div>';
             return;
         }
 
@@ -500,7 +500,7 @@
     function _renderAllList(items) {
         if (!items.length) {
             document.getElementById('siAllList').innerHTML =
-                '<div class="empty-state"><div class="empty-icon">🔄</div><p>No standing instructions yet</p><small>Add rent, EMIs, subscriptions — anything recurring</small></div>';
+                '<div class="empty-state"><div class="empty-icon"><i class="ph ph-arrows-clockwise"></i></div><p>No standing instructions yet</p><small>Add rent, EMIs, subscriptions — anything recurring</small></div>';
             return;
         }
 
@@ -525,7 +525,7 @@
     }
 
     function _renderSIRow(si) {
-        const catIcon = (_siCategories.find(c => c.name === si.category) || {}).icon || '🔄';
+        const catIcon = (_siCategories.find(c => c.name === si.category) || {}).icon || 'arrows-clockwise';
         const freqStr = si.frequency === 'monthly' ? 'on the ' + _ordinal(si.dayOfMonth)
             : si.frequency === 'weekly' ? 'every ' + si.dayOfWeek
                 : si.frequency === 'quarterly' ? 'quarterly'
@@ -539,7 +539,7 @@
         const paused = !si.isActive;
 
         return `<div class="si-item${paused ? ' paused' : ''}">
-    <div class="si-icon">${catIcon}</div>
+    <div class="si-icon">${_phIcon(catIcon)}</div>
     <div class="si-info">
       <div class="si-name">${esc(si.name)}${paused ? ' <span class="si-paused-badge">Paused</span>' : ''}</div>
       <div class="si-meta">${esc(si.category)} · ${freqStr}${monthlyStr}${endStr}${si.autoLog ? ' · auto' : ' · manual'}</div>
@@ -618,11 +618,11 @@
     }
 
     function _renderSICategoryGrid() {
-        const cats = _siCategories.length ? _siCategories : [{ name: 'Other', icon: '📦' }];
+        const cats = _siCategories.length ? _siCategories : [{ name: 'Other', icon: 'package' }];
         document.getElementById('siCategoryGrid').innerHTML = cats.map(c =>
             `<button class="cat-btn${_siSelectedCat === c.name ? ' selected' : ''}"
       data-cat="${esc(c.name)}">
-      <span class="cat-emoji">${c.icon}</span>
+      <span class="cat-emoji">${_phIcon(c.icon)}</span>
       <span>${esc(c.name)}</span>
     </button>`
         ).join('');

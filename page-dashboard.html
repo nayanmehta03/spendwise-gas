@@ -2,21 +2,24 @@
 
   <!-- STAT CARDS — skeleton first, replaced on load -->
   <div class="stats-row" id="dashStatsRow">
-    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
-    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
-    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
-    <div class="skeleton-card"><div class="skeleton skel-val"></div><div class="skeleton skel-sub"></div></div>
+    <div class="skeleton-card">
+      <div class="skeleton skel-val"></div>
+      <div class="skeleton skel-sub"></div>
+    </div>
+    <div class="skeleton-card">
+      <div class="skeleton skel-val"></div>
+      <div class="skeleton skel-sub"></div>
+    </div>
+    <div class="skeleton-card">
+      <div class="skeleton skel-val"></div>
+      <div class="skeleton skel-sub"></div>
+    </div>
+    <div class="skeleton-card">
+      <div class="skeleton skel-val"></div>
+      <div class="skeleton skel-sub"></div>
+    </div>
   </div>
 
-  <!-- QUICK ADD BANNER -->
-  <button class="btn-quick-add" onclick="navigateTo('add')">
-    <span class="quick-add-icon">＋</span>
-    <div class="quick-add-text">
-      <span class="quick-add-title">Add Expense</span>
-      <span class="quick-add-sub">Log a new transaction instantly</span>
-    </div>
-    <span class="quick-add-arrow">→</span>
-  </button>
 
   <!-- BUDGET — always visible, skeleton until data loads -->
   <div>
@@ -25,9 +28,18 @@
       <button class="link-btn" onclick="navigateTo('settings')">Edit budgets →</button>
     </div>
     <div class="budget-grid" id="dashBudgetGrid">
-      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:80%"></div></div>
-      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:80%"></div></div>
-      <div class="skeleton-card"><div class="skeleton skel-line"></div><div class="skeleton skel-val" style="width:60%"></div></div>
+      <div class="skeleton-card">
+        <div class="skeleton skel-line"></div>
+        <div class="skeleton skel-val" style="width:80%"></div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skeleton skel-line"></div>
+        <div class="skeleton skel-val" style="width:80%"></div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skeleton skel-line"></div>
+        <div class="skeleton skel-val" style="width:60%"></div>
+      </div>
     </div>
   </div>
 
@@ -50,91 +62,101 @@
 </div>
 
 <script>
-// ============================================================
-// PAGE: DASHBOARD
-// Dashboard loads via three parallel google.script.run calls: stats, budget, recent.
-// Skeleton placeholders show immediately; each section fills in independently.
-// ============================================================
+  // ============================================================
+  // PAGE: DASHBOARD
+  // Loads via four parallel google.script.run calls: stats, budget, recent, committed.
+  // Skeleton placeholders show immediately; each section fills independently.
+  // ============================================================
 
-let _dashData        = null;
-let _dashInitialized = false;
+  let _dashData = null;
+  let _dashInitialized = false;
 
-function initDashboard() {
-  if (_dashInitialized) return;
-  _dashInitialized = true;
-  _loadDashboard();
-}
-
-function refreshDashboard() {
-  _loadDashboard();
-  showToast('Refreshing...', 'info');
-}
-
-function _loadDashboard() {
-  // Fire 3 small calls in parallel — each stays well under GAS 50KB limit
-  let _results = {};
-  let _done    = 0;
-
-  function _onPart(key, data) {
-    _results[key] = data;
-    _done++;
-    if (_done === 3) _assembleDashboard(_results);
+  function initDashboard() {
+    if (_dashInitialized) return;
+    _dashInitialized = true;
+    _loadDashboard();
   }
 
-  function _onFail(key) {
-    return () => {
-      _results[key] = null;
+  function refreshDashboard() {
+    _loadDashboard();
+    showToast('Refreshing...', 'info');
+  }
+
+  function _loadDashboard() {
+    let _results = {};
+    let _done = 0;
+
+    function _onPart(key, data) {
+      _results[key] = data;
       _done++;
-      if (_done === 3) _assembleDashboard(_results);
-    };
+      if (_done === 4) _assembleDashboard(_results);
+    }
+
+    function _onFail(key) {
+      return () => {
+        _results[key] = null;
+        _done++;
+        if (_done === 4) _assembleDashboard(_results);
+      };
+    }
+
+    google.script.run
+      .withSuccessHandler(d => _onPart('stats', d))
+      .withFailureHandler(_onFail('stats'))
+      .getDashboardStats();
+
+    google.script.run
+      .withSuccessHandler(d => _onPart('budget', d))
+      .withFailureHandler(_onFail('budget'))
+      .getDashboardBudget();
+
+    google.script.run
+      .withSuccessHandler(d => _onPart('recent', d))
+      .withFailureHandler(_onFail('recent'))
+      .getDashboardRecent();
+
+    google.script.run
+      .withSuccessHandler(d => _onPart('committed', d))
+      .withFailureHandler(_onFail('committed'))
+      .getCommittedMonthlyTotal();
   }
 
-  google.script.run
-    .withSuccessHandler(d => _onPart('stats',  d))
-    .withFailureHandler(_onFail('stats'))
-    .getDashboardStats();
+  function _assembleDashboard(parts) {
+    const stats = parts.stats || {};
+    const budget = parts.budget || {};
+    const recent = parts.recent || {};
+    const committed = parts.committed || { total: 0, count: 0, committedPct: 0 };
 
-  google.script.run
-    .withSuccessHandler(d => _onPart('budget', d))
-    .withFailureHandler(_onFail('budget'))
-    .getDashboardBudget();
+    const data = {
+      analytics: {
+        totalSpent: stats.totalSpent || 0,
+        totalTransactions: stats.totalTransactions || 0,
+        avgPerDay: stats.avgPerDay || 0,
+        avgPerTransaction: stats.avgPerTransaction || 0,
+        topCategories: stats.topCategory ? [stats.topCategory] : [],
+      },
+      budgetSummary: budget.budgetSummary || [],
+      categories: budget.categories || [],
+      recentExpenses: recent.recentExpenses || [],
+      committed,
+      lastUpdated: stats.lastUpdated || new Date().toISOString()
+    };
 
-  google.script.run
-    .withSuccessHandler(d => _onPart('recent', d))
-    .withFailureHandler(_onFail('recent'))
-    .getDashboardRecent();
-}
+    _dashData = data;
+    _renderDashboard(data);
+  }
 
-function _assembleDashboard(parts) {
-  const stats  = parts.stats  || {};
-  const budget = parts.budget || {};
-  const recent = parts.recent || {};
+  function _renderDashboard(data) {
+    if (!data) return;
+    const a = data.analytics || {};
+    const cats = data.categories || [];
+    const c = data.committed || {};
 
-  const data = {
-    analytics: {
-      totalSpent:        stats.totalSpent        || 0,
-      totalTransactions: stats.totalTransactions || 0,
-      avgPerDay:         stats.avgPerDay         || 0,
-      avgPerTransaction: stats.avgPerTransaction || 0,
-      topCategories:     stats.topCategory ? [stats.topCategory] : [],
-    },
-    budgetSummary:  budget.budgetSummary  || [],
-    categories:     budget.categories    || [],
-    recentExpenses: recent.recentExpenses || [],
-    lastUpdated:    stats.lastUpdated     || new Date().toISOString()
-  };
+    const committedPct = c.committedPct || 0;
+    const committedColor = committedPct >= 70 ? 'var(--danger)' : committedPct >= 50 ? 'var(--accent3)' : 'var(--accent2)';
 
-  _dashData = data;
-  _renderDashboard(data);
-}
-
-function _renderDashboard(data) {
-  if (!data) return;
-  const a    = data.analytics  || {};
-  const cats = data.categories || [];
-
-  // Stat cards
-  document.getElementById('dashStatsRow').innerHTML = `
+    // Stat cards — 5 cards, scrollable row on mobile
+    document.getElementById('dashStatsRow').innerHTML = `
     <div class="stat-card accent-green">
       <div class="stat-label">Total This Month</div>
       <div class="stat-value">${fmt(a.totalSpent)}</div>
@@ -154,24 +176,29 @@ function _renderDashboard(data) {
       <div class="stat-label">Top Category</div>
       <div class="stat-value" style="font-size:15px;padding-top:4px;">${a.topCategories && a.topCategories[0] ? a.topCategories[0].category : '—'}</div>
       <div class="stat-sub">${a.topCategories && a.topCategories[0] ? fmt(a.topCategories[0].amount) : ''}</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-color:${committedColor}33;" onclick="navigateTo('standing')">
+      <div class="stat-label">Committed</div>
+      <div class="stat-value" style="color:${committedColor};">${fmt(c.total || 0)}</div>
+      <div class="stat-sub">${c.count || 0} recurring · ${committedPct}% of income</div>
     </div>`;
 
-  // Budget cards
-  _renderDashBudget(data.budgetSummary || []);
+    // Budget cards
+    _renderDashBudget(data.budgetSummary || []);
 
-  // Recent expenses
-  _renderDashRecent(data.recentExpenses || [], cats);
+    // Recent expenses
+    _renderDashRecent(data.recentExpenses || [], cats);
 
-  // Last updated
-  const ts = new Date(data.lastUpdated);
-  document.getElementById('dashLastUpdated').textContent =
-    'Updated ' + ts.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-}
+    // Last updated
+    const ts = new Date(data.lastUpdated);
+    document.getElementById('dashLastUpdated').textContent =
+      'Updated ' + ts.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
 
-function _renderDashBudget(budget) {
-  document.getElementById('dashBudgetGrid').innerHTML = budget.length === 0
-    ? `<p style="color:var(--text3);font-size:13px;grid-column:1/-1;">No budget set. <button class="link-btn" onclick="navigateTo('settings')">Add budgets →</button></p>`
-    : budget.map(b => {
+  function _renderDashBudget(budget) {
+    document.getElementById('dashBudgetGrid').innerHTML = budget.length === 0
+      ? `<p style="color:var(--text3);font-size:13px;grid-column:1/-1;">No budget set. <button class="link-btn" onclick="navigateTo('settings')">Add budgets →</button></p>`
+      : budget.map(b => {
         const cls = b.percentage >= 100 ? 'over' : b.percentage >= 80 ? 'warn' : 'safe';
         const rem = b.budget - b.spent;
         return `<div class="budget-card">
@@ -181,21 +208,21 @@ function _renderDashBudget(budget) {
           </div>
           <div class="budget-amounts"><span>Spent</span><span>Budget</span></div>
           <div><span class="budget-spent">${fmt(b.spent)}</span><span class="budget-of"> of ${fmt(b.budget)}</span></div>
-          <div class="budget-bar-bg"><div class="budget-bar ${cls}" style="width:${Math.min(b.percentage,100)}%"></div></div>
+          <div class="budget-bar-bg"><div class="budget-bar ${cls}" style="width:${Math.min(b.percentage, 100)}%"></div></div>
           <div class="budget-remaining">${rem >= 0
             ? `<span class="positive">${fmt(rem)} remaining</span>`
             : `<span class="negative">${fmt(Math.abs(rem))} over</span>`}</div>
         </div>`;
       }).join('');
-}
+  }
 
-function _renderDashRecent(expenses, cats) {
-  const catMap = {};
-  cats.forEach(c => catMap[c.name] = c.icon);
+  function _renderDashRecent(expenses, cats) {
+    const catMap = {};
+    cats.forEach(c => catMap[c.name] = c.icon);
 
-  document.getElementById('dashRecentList').innerHTML = expenses.length === 0
-    ? `<div class="empty-state"><div class="empty-icon">💸</div><p>No expenses yet</p><small>Tap + to get started</small></div>`
-    : expenses.map(e => `
+    document.getElementById('dashRecentList').innerHTML = expenses.length === 0
+      ? `<div class="empty-state"><div class="empty-icon">💸</div><p>No expenses yet</p><small>Tap + to get started</small></div>`
+      : expenses.map(e => `
       <div class="expense-item">
         <div class="expense-icon">${catMap[e.category] || '📦'}</div>
         <div class="expense-info">
@@ -210,5 +237,5 @@ function _renderDashRecent(expenses, cats) {
           <div class="expense-date">${formatDate(e.date)}</div>
         </div>
       </div>`).join('');
-}
+  }
 </script>

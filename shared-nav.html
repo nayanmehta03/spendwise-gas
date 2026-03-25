@@ -49,180 +49,181 @@
 </div>
 
 <script>
-// ============================================================
-// SHARED UTILITIES — available to all page scripts
-// ============================================================
+  // ============================================================
+  // SHARED UTILITIES — available to all page scripts
+  // ============================================================
 
-// ── Payment methods — single source of truth ─────────────────
-const PAYMENT_METHODS = [
-  { value: 'Cash',          label: '💵 Cash'          },
-  { value: 'UPI',           label: '📱 UPI'           },
-  { value: 'Credit Card',   label: '💳 Credit Card'   },
-  { value: 'Debit Card',    label: '💳 Debit Card'    },
-  { value: 'Bank Transfer', label: '🏦 Bank Transfer' },
-  { value: 'Wallet',        label: '👛 Wallet'        },
-];
-function buildPaymentOptions(selected) {
-  return PAYMENT_METHODS.map(m =>
-    `<option value="${m.value}"${m.value === selected ? ' selected' : ''}>${m.label}</option>`
-  ).join('');
-}
-// Currency symbol — set at boot from settings, defaults to ₹
-// Updated by _loadAppCurrency() called from initAdd/initDashboard
-let _currencySymbol = '₹';
-function fmt(amount) {
-  if (amount == null) return _currencySymbol + '0.00';
-  return _currencySymbol + parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-// Call once on any page that loads settings to wire up the currency globally
-function _loadAppCurrency(settings) {
-  if (settings && settings.currency) _currencySymbol = settings.currency;
-}
-function esc(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function formatDate(d) {
-  if (!d) return '';
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-function _padDate(n) { return String(n).padStart(2, '0'); }
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${_padDate(d.getMonth()+1)}-${_padDate(d.getDate())}`;
-}
-function firstOfMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${_padDate(d.getMonth()+1)}-01`;
-}
+  // ── Payment methods — single source of truth ─────────────────
+  const PAYMENT_METHODS = [
+    { value: 'Auto-debit', label: '🔄 Auto-debit' },
+    { value: 'Cash', label: '💵 Cash' },
+    { value: 'UPI', label: '📱 UPI' },
+    { value: 'Credit Card', label: '💳 Credit Card' },
+    { value: 'Debit Card', label: '💳 Debit Card' },
+    { value: 'Bank Transfer', label: '🏦 Bank Transfer' },
+    { value: 'Wallet', label: '👛 Wallet' },
+  ];
+  function buildPaymentOptions(selected) {
+    return PAYMENT_METHODS.map(m =>
+      `<option value="${m.value}"${m.value === selected ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
+  }
+  // Currency symbol — set at boot from settings, defaults to ₹
+  // Updated by _loadAppCurrency() called from initAdd/initDashboard
+  let _currencySymbol = '₹';
+  function fmt(amount) {
+    if (amount == null) return _currencySymbol + '0.00';
+    return _currencySymbol + parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // Call once on any page that loads settings to wire up the currency globally
+  function _loadAppCurrency(settings) {
+    if (settings && settings.currency) _currencySymbol = settings.currency;
+  }
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function formatDate(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function _padDate(n) { return String(n).padStart(2, '0'); }
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${_padDate(d.getMonth() + 1)}-${_padDate(d.getDate())}`;
+  }
+  function firstOfMonthStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${_padDate(d.getMonth() + 1)}-01`;
+  }
 
-// ── Toast ────────────────────────────────────────────────────
-let _toastTimer;
-function showToast(msg, type) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className   = 'toast' + (type ? ' ' + type : '');
-  t.classList.remove('hidden');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
-}
+  // ── Toast ────────────────────────────────────────────────────
+  let _toastTimer;
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' ' + type : '');
+    t.classList.remove('hidden');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
+  }
 
-// ── Chart.js lazy loader ─────────────────────────────────────
-let _chartJsReady = false;
-let _chartJsQueue = [];
-function loadChartJs(cb) {
-  if (_chartJsReady) return cb();
-  _chartJsQueue.push(cb);
-  if (_chartJsQueue.length > 1) return; // already loading
-  const s   = document.createElement('script');
-  s.src     = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-  s.onload  = () => { _chartJsReady = true; _chartJsQueue.forEach(fn => fn()); _chartJsQueue = []; };
-  document.head.appendChild(s);
-}
+  // ── Chart.js lazy loader ─────────────────────────────────────
+  let _chartJsReady = false;
+  let _chartJsQueue = [];
+  function loadChartJs(cb) {
+    if (_chartJsReady) return cb();
+    _chartJsQueue.push(cb);
+    if (_chartJsQueue.length > 1) return; // already loading
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    s.onload = () => { _chartJsReady = true; _chartJsQueue.forEach(fn => fn()); _chartJsQueue = []; };
+    document.head.appendChild(s);
+  }
 
-// ── Shared chart colours ─────────────────────────────────────
-const CHART_COLORS = ['#4f8ef7','#6fcf97','#f2994a','#9b51e0','#eb5757','#56ccf2','#f2c94c','#219653','#bb6bd9','#f97316'];
+  // ── Shared chart colours ─────────────────────────────────────
+  const CHART_COLORS = ['#4f8ef7', '#6fcf97', '#f2994a', '#9b51e0', '#eb5757', '#56ccf2', '#f2c94c', '#219653', '#bb6bd9', '#f97316'];
 
-// ── Chart factory helpers ────────────────────────────────────
-function makeBarChart(canvasId, labels, data, color) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets: [{ data, backgroundColor: color || 'rgba(79,142,247,0.7)', borderRadius: 3 }] },
-    options: {
-      responsive: true, plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: '#5c6478', maxTicksLimit: 10 } },
-        y: { grid: { color: '#272d3d' }, ticks: { color: '#5c6478', callback: v => '₹'+v } }
+  // ── Chart factory helpers ────────────────────────────────────
+  function makeBarChart(canvasId, labels, data, color) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return null;
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: color || 'rgba(79,142,247,0.7)', borderRadius: 3 }] },
+      options: {
+        responsive: true, plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#5c6478', maxTicksLimit: 10 } },
+          y: { grid: { color: '#272d3d' }, ticks: { color: '#5c6478', callback: v => '₹' + v } }
+        }
       }
-    }
+    });
+  }
+
+  function makeDonutChart(canvasId, labels, data, colors) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return null;
+    return new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors || CHART_COLORS, borderWidth: 0, hoverOffset: 4 }] },
+      options: { responsive: true, cutout: '65%', plugins: { legend: { display: false } } }
+    });
+  }
+
+  // ── Edit modal ───────────────────────────────────────────────
+  let _editingId = null;
+  let _editExpenseList = [];
+  let _editCatList = [];
+  let _editCallback = null;
+
+  function openEditModal(id, expenses, categories, onSaved) {
+    _editingId = id;
+    _editExpenseList = expenses || [];
+    _editCatList = categories || [];
+    _editCallback = onSaved || null;
+
+    const e = _editExpenseList.find(x => x.id === id);
+    if (!e) return;
+
+    document.getElementById('editAmount').value = e.amount;
+    document.getElementById('editDate').value = e.date;
+    document.getElementById('editDescription').value = e.description;
+    document.getElementById('editNotes').value = e.notes || '';
+
+    document.getElementById('editCategory').innerHTML = _editCatList.map(c =>
+      `<option value="${esc(c.name)}" ${c.name === e.category ? 'selected' : ''}>${c.icon} ${esc(c.name)}</option>`
+    ).join('');
+
+    document.getElementById('editPayment').value = e.paymentMethod || 'Cash';
+    document.getElementById('editModal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('editModal').classList.add('hidden');
+    _editingId = null;
+  }
+
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  document.getElementById('cancelEdit').addEventListener('click', closeModal);
+  document.getElementById('editModal').addEventListener('click', ev => {
+    if (ev.target === document.getElementById('editModal')) closeModal();
   });
-}
 
-function makeDonutChart(canvasId, labels, data, colors) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: colors || CHART_COLORS, borderWidth: 0, hoverOffset: 4 }] },
-    options: { responsive: true, cutout: '65%', plugins: { legend: { display: false } } }
+  // Populate payment select from shared constant — single source of truth
+  document.getElementById('editPayment').innerHTML =
+    PAYMENT_METHODS.map(p => `<option value="${p.value}">${p.label}</option>`).join('');
+
+  document.getElementById('saveEdit').addEventListener('click', function () {
+    if (!_editingId) return;
+    const expense = {
+      amount: parseFloat(document.getElementById('editAmount').value),
+      date: document.getElementById('editDate').value,
+      description: document.getElementById('editDescription').value,
+      category: document.getElementById('editCategory').value,
+      paymentMethod: document.getElementById('editPayment').value,
+      notes: document.getElementById('editNotes').value
+    };
+    this.disabled = true;
+    this.textContent = 'Saving...';
+    const btn = this;
+    google.script.run
+      .withSuccessHandler(r => {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        if (r.success) {
+          closeModal();
+          showToast('Expense updated!', 'success');
+          if (typeof _editCallback === 'function') _editCallback();
+        } else {
+          showToast('Update failed: ' + (r.message || ''), 'error');
+        }
+      })
+      .withFailureHandler(() => {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        showToast('Update failed', 'error');
+      })
+      .updateExpense(_editingId, expense);
   });
-}
-
-// ── Edit modal ───────────────────────────────────────────────
-let _editingId       = null;
-let _editExpenseList = [];
-let _editCatList     = [];
-let _editCallback    = null;
-
-function openEditModal(id, expenses, categories, onSaved) {
-  _editingId       = id;
-  _editExpenseList = expenses   || [];
-  _editCatList     = categories || [];
-  _editCallback    = onSaved    || null;
-
-  const e = _editExpenseList.find(x => x.id === id);
-  if (!e) return;
-
-  document.getElementById('editAmount').value     = e.amount;
-  document.getElementById('editDate').value        = e.date;
-  document.getElementById('editDescription').value = e.description;
-  document.getElementById('editNotes').value       = e.notes || '';
-
-  document.getElementById('editCategory').innerHTML = _editCatList.map(c =>
-    `<option value="${esc(c.name)}" ${c.name === e.category ? 'selected' : ''}>${c.icon} ${esc(c.name)}</option>`
-  ).join('');
-
-  document.getElementById('editPayment').value = e.paymentMethod || 'Cash';
-  document.getElementById('editModal').classList.remove('hidden');
-}
-
-function closeModal() {
-  document.getElementById('editModal').classList.add('hidden');
-  _editingId = null;
-}
-
-document.getElementById('closeModal').addEventListener('click', closeModal);
-document.getElementById('cancelEdit').addEventListener('click', closeModal);
-document.getElementById('editModal').addEventListener('click', ev => {
-  if (ev.target === document.getElementById('editModal')) closeModal();
-});
-
-// Populate payment select from shared constant — single source of truth
-document.getElementById('editPayment').innerHTML =
-  PAYMENT_METHODS.map(p => `<option value="${p.value}">${p.label}</option>`).join('');
-
-document.getElementById('saveEdit').addEventListener('click', function() {
-  if (!_editingId) return;
-  const expense = {
-    amount:        parseFloat(document.getElementById('editAmount').value),
-    date:          document.getElementById('editDate').value,
-    description:   document.getElementById('editDescription').value,
-    category:      document.getElementById('editCategory').value,
-    paymentMethod: document.getElementById('editPayment').value,
-    notes:         document.getElementById('editNotes').value
-  };
-  this.disabled    = true;
-  this.textContent = 'Saving...';
-  const btn = this;
-  google.script.run
-    .withSuccessHandler(r => {
-      btn.disabled    = false;
-      btn.textContent = 'Save Changes';
-      if (r.success) {
-        closeModal();
-        showToast('Expense updated!', 'success');
-        if (typeof _editCallback === 'function') _editCallback();
-      } else {
-        showToast('Update failed: ' + (r.message || ''), 'error');
-      }
-    })
-    .withFailureHandler(() => {
-      btn.disabled    = false;
-      btn.textContent = 'Save Changes';
-      showToast('Update failed', 'error');
-    })
-    .updateExpense(_editingId, expense);
-});
 </script>

@@ -1,0 +1,752 @@
+<div class="page-content">
+
+    <!-- ZONE 1: UPCOMING THIS MONTH -->
+    <div class="card" style="margin-bottom:14px;">
+        <div class="card-header" style="margin-bottom:12px;">
+            <h3>Upcoming This Month</h3>
+            <span id="siMonthLabel" style="font-size:12px;color:var(--text3);"></span>
+        </div>
+        <div id="siUpcomingList">
+            <div class="skeleton" style="height:56px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+            <div class="skeleton" style="height:56px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+            <div class="skeleton" style="height:56px;border-radius:var(--radius-sm);"></div>
+        </div>
+        <div id="siUpcomingTotal"
+            style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--text2);">Total this month</span>
+            <span id="siUpcomingTotalAmt"
+                style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);"></span>
+        </div>
+    </div>
+
+    <!-- ZONE 2: COMMITTED SPEND BREAKDOWN -->
+    <div class="card" id="siCommittedCard" style="margin-bottom:14px;display:none;">
+        <div class="card-header" style="margin-bottom:14px;">
+            <h3>Committed Spend</h3>
+            <span style="font-size:12px;color:var(--text3);">monthly equivalent</span>
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">
+            <span id="siCommittedTotal"
+                style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--text);"></span>
+            <span id="siCommittedPct" style="font-size:13px;font-weight:600;"></span>
+        </div>
+
+        <div id="siCommittedBar"
+            style="height:6px;border-radius:99px;background:var(--bg3);margin-bottom:8px;overflow:hidden;">
+            <div id="siCommittedBarFill" style="height:100%;border-radius:99px;transition:width 0.6s ease;"></div>
+        </div>
+
+        <div id="siCommittedMeta" style="font-size:12px;color:var(--text2);margin-bottom:14px;"></div>
+
+        <!-- Category breakdown pills -->
+        <div id="siCommittedBreakdown" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- ZONE 3: ALL STANDING INSTRUCTIONS -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="font-size:15px;">Standing Instructions</h3>
+        <button class="btn-primary btn-sm" id="siAddBtn">+ Add</button>
+    </div>
+
+    <!-- ADD / EDIT FORM (hidden by default) -->
+    <div class="card" id="siForm" style="display:none;margin-bottom:14px;">
+        <div class="card-header" style="margin-bottom:12px;">
+            <h3 id="siFormTitle">New Standing Instruction</h3>
+            <button class="link-btn" id="siFormCancel">Cancel</button>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group" style="flex:2;">
+                <label>Name *</label>
+                <input type="text" id="siName" class="form-input" placeholder="e.g. HDFC Home Loan EMI"
+                    autocomplete="off" />
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label>Amount *</label>
+                <div class="amount-input-wrap">
+                    <span class="currency-symbol">₹</span>
+                    <input type="number" id="siAmount" placeholder="0" class="amount-input" inputmode="decimal" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Category *</label>
+            <div id="siCategoryGrid" class="category-grid"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Frequency *</label>
+                <select id="siFrequency" class="form-input">
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="custom">Custom interval</option>
+                </select>
+            </div>
+            <div class="form-group" id="siDayOfMonthGroup">
+                <label>Day of month</label>
+                <input type="number" id="siDayOfMonth" class="form-input" min="1" max="31" value="1" placeholder="1" />
+            </div>
+            <div class="form-group" id="siDayOfWeekGroup" style="display:none;">
+                <label>Day of week</label>
+                <select id="siDayOfWeek" class="form-input">
+                    <option>Monday</option>
+                    <option>Tuesday</option>
+                    <option>Wednesday</option>
+                    <option>Thursday</option>
+                    <option>Friday</option>
+                    <option>Saturday</option>
+                    <option>Sunday</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row" id="siCustomIntervalGroup" style="display:none;">
+            <div class="form-group">
+                <label>Repeat every (days) *</label>
+                <input type="number" id="siCustomDays" class="form-input" min="1" max="365" value="14"
+                    placeholder="e.g. 14" />
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Start date</label>
+                <input type="date" id="siStartDate" class="form-input" />
+            </div>
+            <div class="form-group">
+                <label>End date <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+                <input type="date" id="siEndDate" class="form-input" />
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Payment method</label>
+                <select id="siPayment" class="form-input"></select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Notes</label>
+            <input type="text" id="siNotes" class="form-input" placeholder="Optional..." autocomplete="off" />
+        </div>
+
+        <!-- Auto-log toggle -->
+        <div
+            style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);margin-top:4px;">
+            <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text);">Auto-log</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px;">Automatically create an expense on the
+                    due date</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="siAutoLog" checked />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+        </div>
+
+        <button class="btn-primary btn-full" id="siFormSubmit" style="margin-top:12px;">Save Instruction</button>
+    </div>
+
+    <!-- ALL INSTRUCTIONS LIST -->
+    <div id="siAllList">
+        <div class="skeleton" style="height:70px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+        <div class="skeleton" style="height:70px;border-radius:var(--radius-sm);"></div>
+    </div>
+
+</div>
+
+<style>
+    /* ── Standing Instructions page ──────────────────────────── */
+    .si-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .si-item:last-child {
+        border-bottom: none;
+    }
+
+    .si-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-sm);
+        background: var(--bg3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .si-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .si-name {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .si-meta {
+        font-size: 11px;
+        color: var(--text3);
+        margin-top: 2px;
+    }
+
+    .si-amount {
+        font-family: 'DM Serif Display', serif;
+        font-size: 16px;
+        color: var(--text);
+        white-space: nowrap;
+    }
+
+    .si-actions {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    /* Upcoming item */
+    .si-upcoming-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--bg2);
+        margin-bottom: 6px;
+    }
+
+    .si-upcoming-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .si-date-badge {
+        min-width: 38px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text2);
+        line-height: 1.3;
+    }
+
+    .si-date-badge .si-day {
+        font-size: 16px;
+        color: var(--text);
+        display: block;
+    }
+
+    .si-upcoming-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .si-upcoming-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+    }
+
+    .si-upcoming-cat {
+        font-size: 11px;
+        color: var(--text3);
+    }
+
+    .si-upcoming-amt {
+        font-family: 'DM Serif Display', serif;
+        font-size: 15px;
+        color: var(--text);
+        margin: 0 8px;
+        white-space: nowrap;
+    }
+
+    /* Status badges */
+    .si-status {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 99px;
+        white-space: nowrap;
+    }
+
+    .si-status.logged {
+        background: rgba(111, 207, 151, 0.15);
+        color: var(--accent2);
+    }
+
+    .si-status.overdue {
+        background: rgba(235, 87, 87, 0.15);
+        color: var(--danger);
+    }
+
+    .si-status.due_soon {
+        background: rgba(242, 153, 74, 0.15);
+        color: var(--accent3);
+    }
+
+    .si-status.upcoming {
+        background: var(--bg3);
+        color: var(--text3);
+    }
+
+    /* Quick-log button */
+    .si-log-btn {
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--bg3);
+        color: var(--text2);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        white-space: nowrap;
+    }
+
+    .si-log-btn:hover {
+        border-color: var(--accent2);
+        color: var(--accent2);
+        background: rgba(111, 207, 151, 0.08);
+    }
+
+    .si-log-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    /* Paused state */
+    .si-item.paused .si-name,
+    .si-item.paused .si-amount {
+        opacity: 0.45;
+    }
+
+    .si-paused-badge {
+        font-size: 10px;
+        color: var(--text3);
+        background: var(--bg3);
+        padding: 1px 6px;
+        border-radius: 99px;
+    }
+
+    /* Committed breakdown pills */
+    .si-cat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 99px;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--text2);
+    }
+
+    .si-cat-pill span {
+        color: var(--text);
+        font-weight: 600;
+    }
+</style>
+
+<script>
+    // ============================================================
+    // PAGE: STANDING INSTRUCTIONS (Recurring)
+    // ============================================================
+
+    let _siInitialized = false;
+    let _siData = null;  // full page data from server
+    let _siEditingId = null;  // null = adding new, string = editing existing
+    let _siCategories = [];
+    let _siSelectedCat = '';
+
+    const _FREQ_LABELS = {
+        monthly: 'Monthly', weekly: 'Weekly',
+        quarterly: 'Quarterly', yearly: 'Yearly'
+    };
+
+    function initStanding() {
+        if (_siInitialized) return;
+        _siInitialized = true;
+        _wireStandingListeners();
+        _renderSICategoryGrid();
+        document.getElementById('siPayment').innerHTML = buildPaymentOptions('Auto-debit');
+        _loadStanding();
+    }
+
+    function refreshStanding() {
+        _loadStanding();
+        showToast('Refreshing...', 'info');
+    }
+
+    function _loadStanding() {
+        google.script.run
+            .withSuccessHandler(data => {
+                _siData = data;
+                _siCategories = data.categories || [];
+                _loadAppCurrency(data.settings);
+                _renderUpcoming(data.upcoming || []);
+                _renderCommitted(data.committed || {});
+                _renderAllList(data.all || []);
+            })
+            .withFailureHandler(() => showToast('Failed to load recurring data', 'error'))
+            .getStandingPageData();
+    }
+
+    // ── Wire listeners ───────────────────────────────────────────
+    function _wireStandingListeners() {
+        document.getElementById('siAddBtn').addEventListener('click', _openAddForm);
+        document.getElementById('siFormCancel').addEventListener('click', _closeForm);
+        document.getElementById('siFormSubmit').addEventListener('click', _submitForm);
+
+        document.getElementById('siFrequency').addEventListener('change', function () {
+            const isWeekly = this.value === 'weekly';
+            const isCustom = this.value === 'custom';
+            document.getElementById('siDayOfMonthGroup').style.display = (isWeekly || isCustom) ? 'none' : '';
+            document.getElementById('siDayOfWeekGroup').style.display = isWeekly ? '' : 'none';
+            document.getElementById('siCustomIntervalGroup').style.display = isCustom ? '' : 'none';
+        });
+    }
+
+    // ── Zone 1: Upcoming ─────────────────────────────────────────
+    function _renderUpcoming(items) {
+        const now = new Date();
+        const label = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+        document.getElementById('siMonthLabel').textContent = label;
+
+        if (!items.length) {
+            document.getElementById('siUpcomingList').innerHTML =
+                '<div class="empty-state"><div class="empty-icon">📅</div><p>No recurring items this month</p><small>Add your first standing instruction below</small></div>';
+            return;
+        }
+
+        document.getElementById('siUpcomingList').innerHTML = items.map(si => {
+            const dueDate = new Date(si.dueDate + 'T00:00:00');
+            const day = dueDate.getDate();
+            const mon = dueDate.toLocaleString('en-IN', { month: 'short' });
+            const statusLbl = { logged: 'Logged ✓', overdue: 'Overdue', due_soon: 'Due soon', upcoming: 'Upcoming' }[si.status] || '';
+            const showLog = si.status !== 'logged';
+
+            return `<div class="si-upcoming-item">
+      <div class="si-date-badge">
+        <span class="si-day">${day}</span>
+        ${mon}
+      </div>
+      <div class="si-upcoming-info">
+        <div class="si-upcoming-name">${esc(si.name)}</div>
+        <div class="si-upcoming-cat">${esc(si.category)}</div>
+      </div>
+      <span class="si-upcoming-amt">${fmt(si.amount)}</span>
+      <span class="si-status ${si.status}">${statusLbl}</span>
+      ${showLog ? `<button class="si-log-btn" id="silog-${esc(si.id)}" onclick="_quickLog('${esc(si.id)}', this)">Log</button>` : ''}
+    </div>`;
+        }).join('');
+
+        // Show total footer
+        const total = items.reduce((s, si) => s + si.amount, 0);
+        document.getElementById('siUpcomingTotalAmt').textContent = fmt(total);
+        document.getElementById('siUpcomingTotal').style.display = 'flex';
+    }
+
+    // ── Zone 2: Committed breakdown ──────────────────────────────
+    function _renderCommitted(c) {
+        if (!c.total || c.total === 0) return;
+        document.getElementById('siCommittedCard').style.display = '';
+
+        const pct = c.committedPct || 0;
+        const color = pct >= 70 ? 'var(--danger)' : pct >= 50 ? 'var(--accent3)' : 'var(--accent2)';
+
+        document.getElementById('siCommittedTotal').textContent = fmt(c.total);
+        document.getElementById('siCommittedTotal').style.color = color;
+
+        const pctEl = document.getElementById('siCommittedPct');
+        pctEl.textContent = pct + '% of income';
+        pctEl.style.color = color;
+
+        document.getElementById('siCommittedBarFill').style.width = Math.min(100, pct) + '%';
+        document.getElementById('siCommittedBarFill').style.background = color;
+
+        const metaEl = document.getElementById('siCommittedMeta');
+        if (c.monthlyIncome > 0) {
+            metaEl.innerHTML =
+                `${fmt(c.total)} committed of ${fmt(c.monthlyIncome)} avg income · <strong style="color:var(--accent2);">${fmt(c.discretionary)}</strong> discretionary`;
+        } else {
+            metaEl.innerHTML = `${fmt(c.total)} per month across ${c.count} instruction${c.count !== 1 ? 's' : ''} · <em style="color:var(--text3);">Log income to see % calculation</em>`;
+        }
+
+        // Category pills
+        const breakdown = c.byCategory || {};
+        const pills = Object.entries(breakdown)
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, amt]) =>
+                `<span class="si-cat-pill">${esc(cat)} <span>${fmt(amt)}</span></span>`
+            ).join('');
+        document.getElementById('siCommittedBreakdown').innerHTML = pills;
+    }
+
+    // ── Zone 3: All instructions list ────────────────────────────
+    function _renderAllList(items) {
+        if (!items.length) {
+            document.getElementById('siAllList').innerHTML =
+                '<div class="empty-state"><div class="empty-icon">🔄</div><p>No standing instructions yet</p><small>Add rent, EMIs, subscriptions — anything recurring</small></div>';
+            return;
+        }
+
+        // Group by frequency
+        const groups = {};
+        items.forEach(si => {
+            const grp = si.frequency || 'monthly';
+            if (!groups[grp]) groups[grp] = [];
+            groups[grp].push(si);
+        });
+
+        const order = ['monthly', 'weekly', 'quarterly', 'yearly'];
+        document.getElementById('siAllList').innerHTML = order
+            .filter(f => groups[f] && groups[f].length)
+            .map(f => {
+                const rows = groups[f].map(si => _renderSIRow(si)).join('');
+                return `<div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.07em;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">${_FREQ_LABELS[f]}</div>
+        <div class="card" style="padding:0 14px;">${rows}</div>
+      </div>`;
+            }).join('');
+    }
+
+    function _renderSIRow(si) {
+        const catIcon = (_siCategories.find(c => c.name === si.category) || {}).icon || '🔄';
+        const freqStr = si.frequency === 'monthly' ? 'on the ' + _ordinal(si.dayOfMonth)
+            : si.frequency === 'weekly' ? 'every ' + si.dayOfWeek
+                : si.frequency === 'quarterly' ? 'quarterly'
+                    : si.frequency === 'yearly' ? 'yearly'
+                        : si.frequency === 'custom' ? 'every ' + (si.customIntervalDays || '?') + ' days'
+                            : si.frequency;
+        const monthlyEq = _monthlyEq(si);
+        const monthlyStr = si.frequency !== 'monthly'
+            ? ` · ${fmt(monthlyEq)}/mo` : '';
+        const endStr = si.endDate ? ` · ends ${si.endDate}` : '';
+        const paused = !si.isActive;
+
+        return `<div class="si-item${paused ? ' paused' : ''}">
+    <div class="si-icon">${catIcon}</div>
+    <div class="si-info">
+      <div class="si-name">${esc(si.name)}${paused ? ' <span class="si-paused-badge">Paused</span>' : ''}</div>
+      <div class="si-meta">${esc(si.category)} · ${freqStr}${monthlyStr}${endStr}${si.autoLog ? ' · auto' : ' · manual'}</div>
+    </div>
+    <div class="si-amount">${fmt(si.amount)}</div>
+    <div class="si-actions">
+      <button class="action-btn" title="${paused ? 'Resume' : 'Pause'}"
+        onclick="_toggleSI('${esc(si.id)}', ${!si.isActive})">${paused ? '▶' : '⏸'}</button>
+      <button class="action-btn edit" title="Edit"
+        onclick="_editSI('${esc(si.id)}')">✎</button>
+      <button class="action-btn" title="Delete"
+        onclick="_deleteSI('${esc(si.id)}')">✕</button>
+    </div>
+  </div>`;
+    }
+
+    // ── Form helpers ─────────────────────────────────────────────
+    function _openAddForm() {
+        _siEditingId = null;
+        document.getElementById('siFormTitle').textContent = 'New Standing Instruction';
+        document.getElementById('siFormSubmit').textContent = 'Save Instruction';
+        _resetForm();
+        document.getElementById('siForm').style.display = '';
+        document.getElementById('siForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function _editSI(id) {
+        const si = (_siData && _siData.all || []).find(s => s.id === id);
+        if (!si) return;
+        _siEditingId = id;
+        document.getElementById('siFormTitle').textContent = 'Edit Instruction';
+        document.getElementById('siFormSubmit').textContent = 'Update Instruction';
+        document.getElementById('siName').value = si.name;
+        document.getElementById('siAmount').value = si.amount;
+        document.getElementById('siFrequency').value = si.frequency;
+        document.getElementById('siDayOfMonth').value = si.dayOfMonth || 1;
+        document.getElementById('siDayOfWeek').value = si.dayOfWeek || 'Monday';
+        document.getElementById('siStartDate').value = si.startDate || '';
+        document.getElementById('siEndDate').value = si.endDate || '';
+        document.getElementById('siNotes').value = si.notes || '';
+        document.getElementById('siAutoLog').checked = si.autoLog;
+        document.getElementById('siDayOfMonthGroup').style.display = (si.frequency === 'weekly' || si.frequency === 'custom') ? 'none' : '';
+        document.getElementById('siDayOfWeekGroup').style.display = si.frequency === 'weekly' ? '' : 'none';
+        document.getElementById('siCustomIntervalGroup').style.display = si.frequency === 'custom' ? '' : 'none';
+        document.getElementById('siCustomDays').value = si.customIntervalDays || 14;
+        _siSelectedCat = si.category;
+        _renderSICategoryGrid();
+        document.getElementById('siPayment').innerHTML = buildPaymentOptions(si.paymentMethod || 'Auto-debit');
+        document.getElementById('siForm').style.display = '';
+        document.getElementById('siForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function _closeForm() {
+        _siEditingId = null;
+        document.getElementById('siForm').style.display = 'none';
+        _resetForm();
+    }
+
+    function _resetForm() {
+        document.getElementById('siName').value = '';
+        document.getElementById('siAmount').value = '';
+        document.getElementById('siFrequency').value = 'monthly';
+        document.getElementById('siDayOfMonth').value = '1';
+        document.getElementById('siDayOfWeek').value = 'Monday';
+        document.getElementById('siStartDate').value = todayStr();
+        document.getElementById('siEndDate').value = '';
+        document.getElementById('siNotes').value = '';
+        document.getElementById('siAutoLog').checked = true;
+        document.getElementById('siDayOfMonthGroup').style.display = '';
+        document.getElementById('siDayOfWeekGroup').style.display = 'none';
+        document.getElementById('siCustomIntervalGroup').style.display = 'none';
+        document.getElementById('siCustomDays').value = '14';
+        _siSelectedCat = '';
+        _renderSICategoryGrid();
+        document.getElementById('siPayment').innerHTML = buildPaymentOptions('Auto-debit');
+    }
+
+    function _renderSICategoryGrid() {
+        const cats = _siCategories.length ? _siCategories : [{ name: 'Other', icon: '📦' }];
+        document.getElementById('siCategoryGrid').innerHTML = cats.map(c =>
+            `<button class="cat-btn${_siSelectedCat === c.name ? ' selected' : ''}"
+      data-cat="${esc(c.name)}">
+      <span class="cat-emoji">${c.icon}</span>
+      <span>${esc(c.name)}</span>
+    </button>`
+        ).join('');
+        document.querySelectorAll('#siCategoryGrid .cat-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                _siSelectedCat = this.dataset.cat;
+                document.querySelectorAll('#siCategoryGrid .cat-btn')
+                    .forEach(b => b.classList.toggle('selected', b.dataset.cat === _siSelectedCat));
+            });
+        });
+    }
+
+    // ── CRUD ─────────────────────────────────────────────────────
+    function _submitForm() {
+        const name = document.getElementById('siName').value.trim();
+        const amount = parseFloat(document.getElementById('siAmount').value);
+        if (!name) return showToast('Enter a name', 'error');
+        if (!amount || amount <= 0) return showToast('Enter a valid amount', 'error');
+        if (!_siSelectedCat) return showToast('Select a category', 'error');
+
+        const freq = document.getElementById('siFrequency').value;
+        if (freq === 'custom') {
+            const days = parseInt(document.getElementById('siCustomDays').value) || 0;
+            if (days < 1 || days > 365) return showToast('Enter a valid interval (1–365 days)', 'error');
+            if (!document.getElementById('siStartDate').value) return showToast('Custom frequency requires a start date', 'error');
+        }
+
+        const si = {
+            name,
+            category: _siSelectedCat,
+            amount,
+            frequency: document.getElementById('siFrequency').value,
+            dayOfMonth: parseInt(document.getElementById('siDayOfMonth').value) || 1,
+            dayOfWeek: document.getElementById('siDayOfWeek').value,
+            startDate: document.getElementById('siStartDate').value,
+            endDate: document.getElementById('siEndDate').value,
+            paymentMethod: document.getElementById('siPayment').value,
+            notes: document.getElementById('siNotes').value.trim(),
+            autoLog: document.getElementById('siAutoLog').checked,
+            customIntervalDays: parseInt(document.getElementById('siCustomDays').value) || 0,
+        };
+
+        const btn = document.getElementById('siFormSubmit');
+        btn.disabled = true; btn.textContent = 'Saving...';
+
+        const fn = _siEditingId ? 'updateStandingInstruction' : 'addStandingInstruction';
+        const args = _siEditingId ? [_siEditingId, si] : [si];
+
+        const runner = _siEditingId
+            ? google.script.run.withSuccessHandler(r => _onSaveResult(r, btn)).withFailureHandler(() => { btn.disabled = false; btn.textContent = _siEditingId ? 'Update Instruction' : 'Save Instruction'; showToast('Save failed', 'error'); }).updateStandingInstruction(_siEditingId, si)
+            : google.script.run.withSuccessHandler(r => _onSaveResult(r, btn)).withFailureHandler(() => { btn.disabled = false; btn.textContent = 'Save Instruction'; showToast('Save failed', 'error'); }).addStandingInstruction(si);
+    }
+
+    function _onSaveResult(r, btn) {
+        btn.disabled = false;
+        btn.textContent = _siEditingId ? 'Update Instruction' : 'Save Instruction';
+        if (r && r.success) {
+            showToast(_siEditingId ? 'Updated!' : 'Instruction saved!', 'success');
+            _closeForm();
+            _loadStanding();
+        } else {
+            showToast('Save failed: ' + (r && r.message || ''), 'error');
+        }
+    }
+
+    function _deleteSI(id) {
+        const si = (_siData && _siData.all || []).find(s => s.id === id);
+        if (!confirm('Delete "' + (si ? si.name : id) + '"? This cannot be undone.')) return;
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r && r.success) { showToast('Deleted', 'success'); _loadStanding(); }
+                else showToast('Delete failed', 'error');
+            })
+            .withFailureHandler(() => showToast('Delete failed', 'error'))
+            .deleteStandingInstruction(id);
+    }
+
+    function _toggleSI(id, setActive) {
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r && r.success) {
+                    showToast(setActive ? 'Resumed' : 'Paused', 'success');
+                    _loadStanding();
+                } else showToast('Failed', 'error');
+            })
+            .withFailureHandler(() => showToast('Failed', 'error'))
+            .toggleStandingInstruction(id, setActive);
+    }
+
+    function _quickLog(id, btn) {
+        btn.disabled = true;
+        btn.textContent = '…';
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r && r.success) {
+                    showToast('Logged!', 'success');
+                    _loadStanding();
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Log';
+                    showToast(r && r.message ? r.message : 'Log failed', 'error');
+                }
+            })
+            .withFailureHandler(() => {
+                btn.disabled = false;
+                btn.textContent = 'Log';
+                showToast('Log failed', 'error');
+            })
+            .logStandingInstruction(id);
+    }
+
+    // ── Utilities ─────────────────────────────────────────────────
+    function _ordinal(n) {
+        const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
+    function _monthlyEq(si) {
+        const a = si.amount || 0;
+        if (si.frequency === 'weekly') return (a * 52) / 12;
+        if (si.frequency === 'quarterly') return a / 3;
+        if (si.frequency === 'yearly') return a / 12;
+        if (si.frequency === 'custom' && si.customIntervalDays > 0) return (a * 365.25 / si.customIntervalDays) / 12;
+        return a;
+    }
+
+</script>

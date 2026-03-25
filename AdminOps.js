@@ -21,7 +21,7 @@
 // Creates Config Sheet + first Shard Sheet, seeds all tabs,
 // installs rotation trigger, stores all IDs in Script Properties.
 function SETUP() {
-  const log  = [];
+  const log = [];
   const props = PropertiesService.getScriptProperties();
 
   log.push('=== SPENDWISE SETUP ===');
@@ -44,7 +44,7 @@ function SETUP() {
     configSS = SpreadsheetApp.create('Spendwise — Config');
     props.setProperty('CONFIG_SHEET_ID', configSS.getId());
     log.push('✓ Config sheet: ' + configSS.getUrl());
-  } catch(e) {
+  } catch (e) {
     log.push('✗ Failed to create Config sheet: ' + e.message);
     Logger.log(log.join('\n'));
     return { success: false, error: e.message };
@@ -52,7 +52,7 @@ function SETUP() {
 
   // Create first Shard Sheet
   let shardSS;
-  const tz    = Session.getScriptTimeZone();
+  const tz = Session.getScriptTimeZone();
   const month = Utilities.formatDate(new Date(), tz, 'yyyy-MM');
   try {
     shardSS = SpreadsheetApp.create('Spendwise — Expenses_Shard_' + month);
@@ -62,7 +62,7 @@ function SETUP() {
     _initConfigSheet(shardId);
     _ensureShardSheet(shardSS);
     log.push('✓ All tabs seeded (Categories, ShardRegistry, Settings, Income, Expenses)');
-  } catch(e) {
+  } catch (e) {
     log.push('✗ Failed to create shard sheet: ' + e.message);
     Logger.log(log.join('\n'));
     return { success: false, error: e.message };
@@ -72,21 +72,29 @@ function SETUP() {
   try {
     _installRotationTrigger();
     log.push('✓ Monthly rotation trigger installed');
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Trigger install failed: ' + e.message + ' — run setupMonthlyRotationTrigger() from editor');
+  }
+
+  // Install daily SI auto-log trigger
+  try {
+    _installSITrigger();
+    log.push('✓ Daily standing instructions trigger installed (07:00)');
+  } catch (e) {
+    log.push('⚠ SI trigger install failed: ' + e.message);
   }
 
   // Smoke test
   try {
     const cats = getCategories();
     log.push('✓ Categories readable: ' + cats.length + ' categories');
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Category read test failed: ' + e.message);
   }
   try {
     const settings = getSettings();
     log.push('✓ Settings readable: defaultPayment=' + settings.defaultPayment);
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Settings read test failed: ' + e.message);
   }
 
@@ -101,12 +109,12 @@ function SETUP() {
 
   Logger.log(log.join('\n'));
   return {
-    success:  true,
+    success: true,
     configId: configSS.getId(),
-    shardId:  shardSS.getId(),
+    shardId: shardSS.getId(),
     month,
     configUrl: configSS.getUrl(),
-    shardUrl:  shardSS.getUrl()
+    shardUrl: shardSS.getUrl()
   };
 }
 
@@ -115,7 +123,7 @@ function SETUP() {
 // Full health check: Script Properties, Config Sheet tabs,
 // shard accessibility, triggers, and cache warmth.
 function STATUS() {
-  const log   = [];
+  const log = [];
   const props = PropertiesService.getScriptProperties();
 
   log.push('=== SPENDWISE STATUS (v' + SPENDWISE_VERSION + ') ===');
@@ -123,13 +131,13 @@ function STATUS() {
   log.push('');
 
   // ── Script Properties ──────────────────────────────────────
-  const configId  = props.getProperty('CONFIG_SHEET_ID');
-  const activeId  = props.getProperty('ACTIVE_SHARD_ID');
-  const oldestId  = props.getProperty('OLDEST_SHARD_ID');
+  const configId = props.getProperty('CONFIG_SHEET_ID');
+  const activeId = props.getProperty('ACTIVE_SHARD_ID');
+  const oldestId = props.getProperty('OLDEST_SHARD_ID');
   log.push('SCRIPT PROPERTIES');
-  log.push('  CONFIG_SHEET_ID  : ' + (configId  || '✗ NOT SET — run SETUP()'));
-  log.push('  ACTIVE_SHARD_ID  : ' + (activeId  || '✗ NOT SET — run RESET()'));
-  log.push('  OLDEST_SHARD_ID  : ' + (oldestId  || '(not set — optional)'));
+  log.push('  CONFIG_SHEET_ID  : ' + (configId || '✗ NOT SET — run SETUP()'));
+  log.push('  ACTIVE_SHARD_ID  : ' + (activeId || '✗ NOT SET — run RESET()'));
+  log.push('  OLDEST_SHARD_ID  : ' + (oldestId || '(not set — optional)'));
 
   if (!configId) {
     log.push('');
@@ -142,14 +150,14 @@ function STATUS() {
   log.push('');
   log.push('CONFIG SHEET (' + configId + ')');
   try {
-    const ss   = SpreadsheetApp.openById(configId);
+    const ss = SpreadsheetApp.openById(configId);
     const tabs = ss.getSheets().map(s => s.getName());
     log.push('  ✓ Accessible: ' + ss.getName());
     log.push('  Tabs found   : ' + tabs.join(', '));
-    ['Categories','ShardRegistry','Settings','Income'].forEach(t => {
+    ['Categories', 'ShardRegistry', 'Settings', 'Income'].forEach(t => {
       log.push('  ' + (tabs.includes(t) ? '✓' : '✗ MISSING') + ' ' + t + ' tab');
     });
-  } catch(e) {
+  } catch (e) {
     log.push('  ✗ CANNOT OPEN: ' + e.message);
   }
 
@@ -159,7 +167,7 @@ function STATUS() {
   try {
     const cats = getCategories();
     log.push('  ✓ ' + cats.length + ' categories loaded');
-  } catch(e) {
+  } catch (e) {
     log.push('  ✗ ' + e.message);
   }
 
@@ -169,7 +177,7 @@ function STATUS() {
   try {
     const s = getSettings();
     log.push('  ✓ currency=' + s.currency + ' defaultPayment=' + s.defaultPayment + ' weekStart=' + s.weekStartDay);
-  } catch(e) {
+  } catch (e) {
     log.push('  ✗ ' + e.message);
   }
 
@@ -181,10 +189,10 @@ function STATUS() {
     log.push('  ✓ ' + records.length + ' shard(s) registered');
     records.forEach((r, i) => {
       let accessible = false;
-      try { SpreadsheetApp.openById(r.id); accessible = true; } catch(e) {}
+      try { SpreadsheetApp.openById(r.id); accessible = true; } catch (e) { }
       log.push('  ' + (i + 1) + '. ' + r.label + ' (' + r.month + ') — ' + (accessible ? '✓ accessible' : '✗ INACCESSIBLE'));
     });
-  } catch(e) {
+  } catch (e) {
     log.push('  ✗ ' + e.message);
   }
 
@@ -193,11 +201,11 @@ function STATUS() {
   log.push('ACTIVE SHARD (' + (activeId || 'NOT SET') + ')');
   if (activeId) {
     try {
-      const ss      = SpreadsheetApp.openById(activeId);
-      const sheet   = ss.getSheetByName('Expenses');
+      const ss = SpreadsheetApp.openById(activeId);
+      const sheet = ss.getSheetByName('Expenses');
       const rowCount = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
       log.push('  ✓ ' + ss.getName() + ' — ' + rowCount + ' expense row(s)');
-    } catch(e) {
+    } catch (e) {
       log.push('  ✗ CANNOT OPEN: ' + e.message + ' — run RESET()');
     }
   }
@@ -209,24 +217,26 @@ function STATUS() {
     const sheet = _getIncomeSheet();
     const count = Math.max(0, sheet.getLastRow() - 1);
     log.push('  ✓ ' + count + ' income row(s)');
-  } catch(e) {
+  } catch (e) {
     log.push('  ✗ ' + e.message);
   }
 
   // ── Triggers ───────────────────────────────────────────────
   log.push('');
   log.push('TRIGGERS');
-  const triggers       = ScriptApp.getProjectTriggers();
-  const storedTrigId   = PropertiesService.getScriptProperties().getProperty('WEEKLY_REPORT_TRIGGER_ID');
-  const hasRotation    = triggers.some(t => t.getHandlerFunction() === 'rotateShardForNewMonth');
-  const hasWeeklyRpt   = triggers.some(t => t.getHandlerFunction() === 'weeklyReportTrigger');
+  const triggers = ScriptApp.getProjectTriggers();
+  const storedTrigId = PropertiesService.getScriptProperties().getProperty('WEEKLY_REPORT_TRIGGER_ID');
+  const hasRotation = triggers.some(t => t.getHandlerFunction() === 'rotateShardForNewMonth');
+  const hasWeeklyRpt = triggers.some(t => t.getHandlerFunction() === 'weeklyReportTrigger');
+  const hasSI = triggers.some(t => t.getHandlerFunction() === 'processStandingInstructions');
   if (triggers.length === 0) {
     log.push('  ⚠ No triggers found — run SETUP() or setupMonthlyRotationTrigger()');
   } else {
-    log.push('  ' + (hasRotation  ? '✓' : '✗') + ' Monthly shard rotation');
+    log.push('  ' + (hasRotation ? '✓' : '✗') + ' Monthly shard rotation');
+    log.push('  ' + (hasSI ? '✓' : '⚠') + ' Daily standing instructions auto-log' + (hasSI ? '' : ' — run UPDATE() to install'));
     if (hasWeeklyRpt) {
       const wt = triggers.find(t => t.getHandlerFunction() === 'weeklyReportTrigger');
-      log.push('  ✓ Weekly email report (trigger id: ' + wt.getUniqueId().substring(0,12) + '...)');
+      log.push('  ✓ Weekly email report (trigger id: ' + wt.getUniqueId().substring(0, 12) + '...)');
       if (storedTrigId && wt.getUniqueId() !== storedTrigId) {
         log.push('  ⚠ Stored trigger ID mismatch — re-save report settings to resync');
       }
@@ -243,8 +253,8 @@ function STATUS() {
   // ── Cache ──────────────────────────────────────────────────
   log.push('');
   log.push('CACHE');
-  const cacheKeys = ['categories','shard_registry','settings',
-    'analytics_current_month','analytics_week','analytics_quarter'];
+  const cacheKeys = ['categories', 'shard_registry', 'settings',
+    'analytics_current_month', 'analytics_week', 'analytics_quarter'];
   cacheKeys.forEach(k => {
     const hit = CacheService.getScriptCache().get(k);
     log.push('  ' + k + ': ' + (hit ? '● warm' : '○ cold'));
@@ -262,7 +272,7 @@ function STATUS() {
 // verifies Config and shard tabs exist, reinstalls trigger if missing.
 // Does not delete or modify any expense or income data.
 function RESET() {
-  const log   = [];
+  const log = [];
   const props = PropertiesService.getScriptProperties();
 
   log.push('=== SPENDWISE RESET ===');
@@ -280,14 +290,14 @@ function RESET() {
       log.push('⚠ No shard records found — Config sheet may be inaccessible');
       log.push('  Run STATUS() to diagnose, or SETUP() to start fresh');
     }
-  } catch(e) {
+  } catch (e) {
     log.push('✗ Could not read shard registry: ' + e.message);
   }
 
   try {
     _initConfigSheet(props.getProperty('ACTIVE_SHARD_ID'));
     log.push('✓ Config sheet tabs verified');
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Config sheet check failed: ' + e.message);
   }
 
@@ -297,7 +307,7 @@ function RESET() {
       _ensureShardSheet(SpreadsheetApp.openById(activeId));
       log.push('✓ Active shard Expenses tab verified');
     }
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Active shard check failed: ' + e.message);
   }
 
@@ -310,8 +320,21 @@ function RESET() {
     } else {
       log.push('✓ Monthly rotation trigger: present');
     }
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Trigger check failed: ' + e.message);
+  }
+
+  try {
+    const hasSI = ScriptApp.getProjectTriggers()
+      .some(t => t.getHandlerFunction() === 'processStandingInstructions');
+    if (!hasSI) {
+      _installSITrigger();
+      log.push('✓ Daily SI trigger reinstalled');
+    } else {
+      log.push('✓ Daily SI trigger: present');
+    }
+  } catch (e) {
+    log.push('⚠ SI trigger check failed: ' + e.message);
   }
 
   log.push('');
@@ -336,8 +359,8 @@ function UPDATE() {
   try {
     const ss = getConfigSS();
     if (!ss.getSheetByName('Income')) {
-      const sheet   = ss.insertSheet('Income');
-      const headers = ['ID','Date','Category','Description','Amount','Notes','Timestamp'];
+      const sheet = ss.insertSheet('Income');
+      const headers = ['ID', 'Date', 'Category', 'Description', 'Amount', 'Notes', 'Timestamp'];
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
       sheet.setFrozenRows(1);
@@ -345,7 +368,7 @@ function UPDATE() {
     } else {
       log.push('✓ Income tab: present');
     }
-  } catch(e) {
+  } catch (e) {
     log.push('✗ Income tab check failed: ' + e.message);
   }
 
@@ -354,10 +377,10 @@ function UPDATE() {
     const records = _getAllShardRecords();
     records.forEach(r => {
       try { _ensureShardSheet(SpreadsheetApp.openById(r.id)); }
-      catch(e) { log.push('⚠ Could not verify shard ' + r.label + ': ' + e.message); }
+      catch (e) { log.push('⚠ Could not verify shard ' + r.label + ': ' + e.message); }
     });
     log.push('✓ All ' + records.length + ' shard Expenses tabs verified');
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Shard check failed: ' + e.message);
   }
 
@@ -371,8 +394,22 @@ function UPDATE() {
     } else {
       log.push('✓ Rotation trigger: present');
     }
-  } catch(e) {
+  } catch (e) {
     log.push('⚠ Trigger check failed: ' + e.message);
+  }
+
+  // Ensure daily SI trigger installed
+  try {
+    const hasSI = ScriptApp.getProjectTriggers()
+      .some(t => t.getHandlerFunction() === 'processStandingInstructions');
+    if (!hasSI) {
+      _installSITrigger();
+      log.push('✓ Daily SI trigger installed');
+    } else {
+      log.push('✓ Daily SI trigger: present');
+    }
+  } catch (e) {
+    log.push('⚠ SI trigger check failed: ' + e.message);
   }
 
   purgeAllCache();
@@ -393,6 +430,14 @@ function _installRotationTrigger() {
   ScriptApp.newTrigger('rotateShardForNewMonth').timeBased().onMonthDay(1).atHour(0).create();
 }
 
+// Deletes and recreates the daily standing instructions trigger (07:00).
+function _installSITrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'processStandingInstructions')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('processStandingInstructions').timeBased().everyDays(1).atHour(7).create();
+}
+
 // Public wrapper — callable directly from editor
 function setupMonthlyRotationTrigger() {
   _installRotationTrigger();
@@ -408,7 +453,7 @@ function setupMonthlyRotationTrigger() {
 // Run after bulk import, shard deletion, or shard migration.
 function fixShardRegistry() {
   const log = [];
-  const tz  = Session.getScriptTimeZone();
+  const tz = Session.getScriptTimeZone();
 
   log.push('=== FIX SHARD REGISTRY ===');
 
@@ -426,19 +471,19 @@ function fixShardRegistry() {
   const validated = [];
   rows.forEach(r => {
     const shardId = String(r[0] || '').trim();
-    const month   = r[1] instanceof Date
+    const month = r[1] instanceof Date
       ? Utilities.formatDate(r[1], tz, 'yyyy-MM')
       : String(r[1] || '').trim();
     if (!shardId) { log.push('  ↷ Skipping empty row'); return; }
 
     try {
-      const ss       = SpreadsheetApp.openById(shardId);
-      const sheet    = ss.getSheetByName(SHEET_NAME);
+      const ss = SpreadsheetApp.openById(shardId);
+      const sheet = ss.getSheetByName(SHEET_NAME);
       const dataRows = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
       validated.push({ shardId, month, dataRows });
-      log.push('  ✓ Kept: ' + month + ' — ' + dataRows + ' rows (' + shardId.substring(0,12) + '...)');
-    } catch(e) {
-      log.push('  ✗ Removed inaccessible shard ' + shardId.substring(0,12) + '... (' + month + ')');
+      log.push('  ✓ Kept: ' + month + ' — ' + dataRows + ' rows (' + shardId.substring(0, 12) + '...)');
+    } catch (e) {
+      log.push('  ✗ Removed inaccessible shard ' + shardId.substring(0, 12) + '... (' + month + ')');
     }
   });
 
@@ -465,20 +510,20 @@ function fixShardRegistry() {
     props.setProperty('ACTIVE_SHARD_ID', newest.shardId);
     props.setProperty('OLDEST_SHARD_ID', oldest.shardId);
     log.push('');
-    log.push('✓ ACTIVE_SHARD_ID → ' + newest.month + ' (' + newest.shardId.substring(0,12) + '...)');
-    log.push('✓ OLDEST_SHARD_ID → ' + oldest.month + ' (' + oldest.shardId.substring(0,12) + '...)');
+    log.push('✓ ACTIVE_SHARD_ID → ' + newest.month + ' (' + newest.shardId.substring(0, 12) + '...)');
+    log.push('✓ OLDEST_SHARD_ID → ' + oldest.month + ' (' + oldest.shardId.substring(0, 12) + '...)');
   }
 
   // Clear caches
-  SCRIPT_CACHE.removeAll(['shard_registry','analytics_week','analytics_month',
-    'analytics_current_month','analytics_quarter','analytics_half',
-    'analytics_current_year','analytics_year']);
+  SCRIPT_CACHE.removeAll(['shard_registry', 'analytics_week', 'analytics_month',
+    'analytics_current_month', 'analytics_quarter', 'analytics_half',
+    'analytics_current_year', 'analytics_year']);
 
   log.push('✓ Registry rewritten with ' + validated.length + ' shard(s) in chronological order');
   log.push('=== DONE ===');
 
   Logger.log(log.join('\n'));
-  return { shards: validated.length, active: validated.length > 0 ? validated[validated.length-1].month : null };
+  return { shards: validated.length, active: validated.length > 0 ? validated[validated.length - 1].month : null };
 }
 
 
@@ -524,7 +569,7 @@ function forceReimportFromCSV() {
 function importFromCSV(forceReimport) {
   forceReimport = forceReimport === true;
   const startTime = Date.now();
-  const log       = [];
+  const log = [];
 
   log.push('=== IMPORT FROM CSV ===');
   log.push(forceReimport ? '⚠ FORCE MODE — existing rows will be cleared' : 'Normal mode — skips duplicates');
@@ -546,13 +591,13 @@ function importFromCSV(forceReimport) {
   });
   log.push('Data spans ' + Object.keys(byMonth).length + ' month(s): ' + Object.keys(byMonth).sort().join(', '));
 
-  const allShards   = _getAllShardRecords();
+  const allShards = _getAllShardRecords();
   let totalImported = 0, totalSkipped = 0;
 
   Object.keys(byMonth).sort().forEach(month => {
-    const monthRows   = byMonth[month];
+    const monthRows = byMonth[month];
     const shardRecord = allShards.find(s => s.month === month);
-    let   shardId, shardSS;
+    let shardId, shardSS;
 
     if (shardRecord) {
       // Validate registered shard is accessible
@@ -560,7 +605,7 @@ function importFromCSV(forceReimport) {
         shardSS = SpreadsheetApp.openById(shardRecord.id);
         shardId = shardRecord.id;
         _ensureShardSheet(shardSS);
-      } catch(e) {
+      } catch (e) {
         log.push('  ⚠ Registered shard for ' + month + ' inaccessible — recreating...');
         shardId = null;
       }
@@ -569,9 +614,9 @@ function importFromCSV(forceReimport) {
     if (!shardId) {
       // Create a new shard for this month
       try {
-        const newSS  = SpreadsheetApp.create('Spendwise — Expenses_Shard_' + month);
-        shardId      = newSS.getId();
-        shardSS      = newSS;
+        const newSS = SpreadsheetApp.create('Spendwise — Expenses_Shard_' + month);
+        shardId = newSS.getId();
+        shardSS = newSS;
         _ensureShardSheet(newSS);
 
         const regSheet = getConfigSS().getSheetByName(SHARD_REGISTRY);
@@ -588,8 +633,8 @@ function importFromCSV(forceReimport) {
           regSheet.appendRow([shardId, month, true, 'Shard ' + month]);
         }
         SCRIPT_CACHE.remove('shard_registry');
-        log.push('  ✓ Created shard for ' + month + ': ' + shardId.substring(0,12) + '...');
-      } catch(e) {
+        log.push('  ✓ Created shard for ' + month + ': ' + shardId.substring(0, 12) + '...');
+      } catch (e) {
         log.push('  ✗ Failed to create shard for ' + month + ': ' + e.message);
         totalSkipped += monthRows.length;
         return;
@@ -615,7 +660,7 @@ function importFromCSV(forceReimport) {
         .map(r => [
           r.ID,
           _parseLocalDate(r.Date),
-          r.Category    || 'Other',
+          r.Category || 'Other',
           r.Description || '',
           parseFloat(r.Amount) || 0,
           r.PaymentMethod || 'UPI',
@@ -632,7 +677,7 @@ function importFromCSV(forceReimport) {
         log.push('  ↷ ' + month + ': all ' + monthRows.length + ' rows already exist, skipped');
         totalSkipped += monthRows.length;
       }
-    } catch(e) {
+    } catch (e) {
       log.push('  ✗ Error writing to shard for ' + month + ': ' + e.message);
       totalSkipped += monthRows.length;
     }
@@ -659,7 +704,7 @@ function _getImportRows() {
 
   if (!csv || !csv.trim()) return [];
 
-  const lines  = csv.trim().split('\n');
+  const lines = csv.trim().split('\n');
   const header = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
 
   return lines.slice(1).map(line => {
@@ -668,7 +713,7 @@ function _getImportRows() {
     let cur = '', inQuote = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
       else if (ch === '"') { inQuote = !inQuote; }
       else if (ch === ',' && !inQuote) { fields.push(cur); cur = ''; }
       else { cur += ch; }
@@ -687,17 +732,17 @@ function _getImportRows() {
 // Run after import to verify sharding overhead is acceptable.
 function runShardExperiment() {
   const log = [];
-  const tz  = Session.getScriptTimeZone();
+  const tz = Session.getScriptTimeZone();
   const now = new Date();
 
   log.push('=== SHARD EXPERIMENT ===');
 
   // Clear analytics cache so reads are cold
-  SCRIPT_CACHE.removeAll(['analytics_current_month','analytics_quarter','shard_registry']);
+  SCRIPT_CACHE.removeAll(['analytics_current_month', 'analytics_quarter', 'shard_registry']);
 
   // ── Test 1: 1-month read (active shard only) ───────────────
-  const t1Start    = Date.now();
-  const activeId   = getActiveShardId();
+  const t1Start = Date.now();
+  const activeId = getActiveShardId();
   const currentMonth = Utilities.formatDate(now, tz, 'yyyy-MM');
   const oneMonthRows = _readShardExpenses(activeId)
     .filter(e => e.date && e.date.substring(0, 7) === currentMonth);
@@ -716,14 +761,16 @@ function runShardExperiment() {
   const shardIds = _getShardsForRange(startStr, null);
 
   const t2Start = Date.now();
-  let   sixMonthRows = 0;
+  let sixMonthRows = 0;
   const shardTimings = [];
   shardIds.forEach(id => {
-    const ts   = Date.now();
+    const ts = Date.now();
     const rows = _readShardExpenses(id).filter(e => e.date && e.date >= startStr);
     sixMonthRows += rows.length;
-    shardTimings.push({ id: id.substring(0,12), rows: rows.length, ms: Date.now() - ts,
-      month: _getAllShardRecords().find(s => s.id === id)?.month || '?' });
+    shardTimings.push({
+      id: id.substring(0, 12), rows: rows.length, ms: Date.now() - ts,
+      month: _getAllShardRecords().find(s => s.id === id)?.month || '?'
+    });
   });
   const t2 = Date.now() - t2Start;
 
@@ -753,9 +800,9 @@ function runShardExperiment() {
   });
 
   // ── Summary ────────────────────────────────────────────────
-  const overhead     = t2 - t1;
-  const extraShards  = Math.max(1, shardIds.length - 1);
-  const perShard     = Math.round(overhead / extraShards);
+  const overhead = t2 - t1;
+  const extraShards = Math.max(1, shardIds.length - 1);
+  const perShard = Math.round(overhead / extraShards);
 
   log.push('');
   log.push('[SUMMARY]');

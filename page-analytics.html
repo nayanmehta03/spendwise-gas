@@ -23,7 +23,9 @@
 
     <!-- Donut: full-width with chart + legend side by side on desktop -->
     <div class="card full-width">
-      <div class="card-header"><h3>By Category</h3></div>
+      <div class="card-header">
+        <h3>By Category</h3>
+      </div>
       <div class="donut-with-legend">
         <canvas id="aDonutChart" class="donut-canvas"></canvas>
         <div id="aDonutLegend" class="donut-legend-side"></div>
@@ -31,12 +33,16 @@
     </div>
 
     <div class="card full-width">
-      <div class="card-header"><h3>Daily Spending (30 days)</h3></div>
+      <div class="card-header">
+        <h3>Daily Spending (30 days)</h3>
+      </div>
       <canvas id="aBarChart"></canvas>
     </div>
 
     <div class="card full-width">
-      <div class="card-header"><h3>Category Breakdown</h3></div>
+      <div class="card-header">
+        <h3>Category Breakdown</h3>
+      </div>
       <div id="aCategoryBreakdown" class="category-breakdown-list"></div>
     </div>
 
@@ -44,7 +50,8 @@
 
   <!-- Monthly Comparison Table -->
   <div style="margin-top:16px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+    <div
+      style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <h3 style="font-family:'DM Serif Display',serif;font-size:16px;">Monthly Comparison</h3>
       <div class="period-tabs" id="comparisonPeriodTabs">
         <button class="tab" data-cperiod="quarter">3 Months</button>
@@ -68,158 +75,229 @@
 </div>
 
 <style>
-.comparison-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-}
-.comparison-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  white-space: nowrap;
-  min-width: 600px;
-}
-.comparison-table th {
-  background: var(--bg3);
-  color: var(--text2);
-  font-weight: 600;
-  padding: 8px 12px;
-  text-align: right;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-.comparison-table th:first-child {
-  text-align: left;
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background: var(--bg3);
-  min-width: 110px;
-}
-.comparison-table td {
-  padding: 7px 12px;
-  text-align: right;
-  border-bottom: 1px solid var(--bg3);
-  color: var(--text2);
-  font-variant-numeric: tabular-nums;
-}
-.comparison-table td:first-child {
-  text-align: left;
-  font-weight: 500;
-  color: var(--text);
-  position: sticky;
-  left: 0;
-  background: var(--card);
-  z-index: 1;
-  border-right: 1px solid var(--border);
-}
-.comparison-table tr:hover td { background: var(--bg3); }
-.comparison-table tr:hover td:first-child { background: var(--bg3); }
+  .comparison-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
 
-/* Over budget highlight */
-.cell-over { background: rgba(235,87,87,0.15) !important; color: var(--danger) !important; font-weight: 600; }
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    white-space: nowrap;
+    min-width: 600px;
+  }
 
-/* Footer rows */
-.comparison-table tr.row-total td  { background: var(--bg2); color: var(--text); font-weight: 700; border-top: 2px solid var(--border); }
-.comparison-table tr.row-avg td    { background: var(--bg2); color: var(--text2); font-style: italic; }
-.comparison-table tr.row-budget td { background: var(--bg2); color: var(--text3); }
-.comparison-table tr.row-income td { background: rgba(111,207,151,0.06); color: var(--accent2); font-weight: 600; }
-.comparison-table tr.row-savings td { background: var(--bg2); }
+  .comparison-table th {
+    background: var(--bg3);
+    color: var(--text2);
+    font-weight: 600;
+    padding: 8px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
 
-/* First-column labels for footer rows */
-.comparison-table tr.row-total  td:first-child { color: var(--text); }
-.comparison-table tr.row-avg    td:first-child { color: var(--text2); }
-.comparison-table tr.row-budget td:first-child { color: var(--text3); }
-.comparison-table tr.row-income td:first-child { color: var(--accent2); }
+  .comparison-table th:first-child {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg3);
+    min-width: 110px;
+  }
 
-.savings-positive { color: var(--accent2); font-weight: 600; }
-.savings-negative { color: var(--danger);  font-weight: 600; }
+  .comparison-table td {
+    padding: 7px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--bg3);
+    color: var(--text2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .comparison-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+    color: var(--text);
+    position: sticky;
+    left: 0;
+    background: var(--card);
+    z-index: 1;
+    border-right: 1px solid var(--border);
+  }
+
+  .comparison-table tr:hover td {
+    background: var(--bg3);
+  }
+
+  .comparison-table tr:hover td:first-child {
+    background: var(--bg3);
+  }
+
+  /* Over budget highlight */
+  .cell-over {
+    background: rgba(235, 87, 87, 0.15) !important;
+    color: var(--danger) !important;
+    font-weight: 600;
+  }
+
+  /* Footer rows */
+  .comparison-table tr.row-total td {
+    background: var(--bg2);
+    color: var(--text);
+    font-weight: 700;
+    border-top: 2px solid var(--border);
+  }
+
+  .comparison-table tr.row-avg td {
+    background: var(--bg2);
+    color: var(--text2);
+    font-style: italic;
+  }
+
+  .comparison-table tr.row-budget td {
+    background: var(--bg2);
+    color: var(--text3);
+  }
+
+  .comparison-table tr.row-committed td {
+    background: #1e1a2e;
+    color: var(--accent4);
+    border-top: 1px solid rgba(155, 81, 224, 0.2);
+  }
+
+  .comparison-table tr.row-committed td:first-child {
+    background: #1e1a2e;
+  }
+
+  .comparison-table tr.row-income td {
+    background: rgba(111, 207, 151, 0.06);
+    color: var(--accent2);
+    font-weight: 600;
+  }
+
+  .comparison-table tr.row-savings td {
+    background: var(--bg2);
+  }
+
+  /* First-column labels for footer rows */
+  .comparison-table tr.row-total td:first-child {
+    color: var(--text);
+  }
+
+  .comparison-table tr.row-avg td:first-child {
+    color: var(--text2);
+  }
+
+  .comparison-table tr.row-budget td:first-child {
+    color: var(--text3);
+  }
+
+  .comparison-table tr.row-committed td:first-child {
+    color: var(--accent4);
+  }
+
+  .comparison-table tr.row-income td:first-child {
+    color: var(--accent2);
+  }
+
+  .savings-positive {
+    color: var(--accent2);
+    font-weight: 600;
+  }
+
+  .savings-negative {
+    color: var(--danger);
+    font-weight: 600;
+  }
 </style>
 
 <script>
-// ============================================================
-// PAGE: ANALYTICS
-// ============================================================
+  // ============================================================
+  // PAGE: ANALYTICS
+  // ============================================================
 
-let _analyticsInitialized = false;
-let _analyticsPeriod      = 'current_month';
-let _comparisonPeriod     = 'year';
-let _analyticsCharts      = {};
-let _analyticsCategories  = [];
+  let _analyticsInitialized = false;
+  let _analyticsPeriod = 'current_month';
+  let _comparisonPeriod = 'year';
+  let _analyticsCharts = {};
+  let _analyticsCategories = [];
 
-function initAnalytics() {
-  if (_analyticsInitialized) return;
-  _analyticsInitialized = true;
+  function initAnalytics() {
+    if (_analyticsInitialized) return;
+    _analyticsInitialized = true;
 
-  // Charts period tabs
-  document.querySelectorAll('#analyticsPeriodTabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('#analyticsPeriodTabs .tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      _analyticsPeriod = tab.dataset.period;
-      _loadAnalytics();
+    // Charts period tabs
+    document.querySelectorAll('#analyticsPeriodTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#analyticsPeriodTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        _analyticsPeriod = tab.dataset.period;
+        _loadAnalytics();
+      });
     });
-  });
 
-  // Comparison period tabs
-  document.querySelectorAll('#comparisonPeriodTabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('#comparisonPeriodTabs .tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      _comparisonPeriod = tab.dataset.cperiod;
-      _loadComparison();
+    // Comparison period tabs
+    document.querySelectorAll('#comparisonPeriodTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#comparisonPeriodTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        _comparisonPeriod = tab.dataset.cperiod;
+        _loadComparison();
+      });
     });
-  });
 
-  _loadAnalytics();
-  _loadComparison();
-}
+    _loadAnalytics();
+    _loadComparison();
+  }
 
-function refreshAnalytics() {
-  _loadAnalytics();
-  _loadComparison();
-  showToast('Refreshing...', 'info');
-}
+  function refreshAnalytics() {
+    _loadAnalytics();
+    _loadComparison();
+    showToast('Refreshing...', 'info');
+  }
 
-// ── Charts ───────────────────────────────────────────────────
-function _loadAnalytics() {
-  document.getElementById('analyticsLoading').style.display = '';
-  document.getElementById('analyticsGrid').style.display    = 'none';
+  // ── Charts ───────────────────────────────────────────────────
+  function _loadAnalytics() {
+    document.getElementById('analyticsLoading').style.display = '';
+    document.getElementById('analyticsGrid').style.display = 'none';
 
-  let _done = 0, _parts = {};
+    let _done = 0, _parts = {};
 
-  function _onPart(key, data) {
-    _parts[key] = data; _done++;
-    if (_done === 3) {
-      _analyticsCategories = _parts.cats || [];
-      loadChartJs(() => _renderAnalytics({ ..._parts.summary, trends: (_parts.trends && _parts.trends.trends) || [] }));
+    function _onPart(key, data) {
+      _parts[key] = data; _done++;
+      if (_done === 3) {
+        _analyticsCategories = _parts.cats || [];
+        loadChartJs(() => _renderAnalytics({ ..._parts.summary, trends: (_parts.trends && _parts.trends.trends) || [] }));
+      }
     }
+    function _onFail(key) {
+      return () => _onPart(key, key === 'trends' ? { trends: [] } : key === 'cats' ? [] : _emptyAnalyticsClient());
+    }
+
+    google.script.run.withSuccessHandler(d => _onPart('summary', d)).withFailureHandler(_onFail('summary')).getAnalyticsSummary(_analyticsPeriod);
+    google.script.run.withSuccessHandler(d => _onPart('trends', d)).withFailureHandler(_onFail('trends')).getAnalyticsTrends(_analyticsPeriod);
+    google.script.run.withSuccessHandler(d => _onPart('cats', d)).withFailureHandler(_onFail('cats')).getCategories();
   }
-  function _onFail(key) {
-    return () => _onPart(key, key === 'trends' ? { trends: [] } : key === 'cats' ? [] : _emptyAnalyticsClient());
+
+  function _emptyAnalyticsClient() {
+    return {
+      totalSpent: 0, totalTransactions: 0, avgPerDay: 0, avgPerTransaction: 0,
+      topCategories: [], trends: [], shardCount: 0
+    };
   }
 
-  google.script.run.withSuccessHandler(d => _onPart('summary', d)).withFailureHandler(_onFail('summary')).getAnalyticsSummary(_analyticsPeriod);
-  google.script.run.withSuccessHandler(d => _onPart('trends',  d)).withFailureHandler(_onFail('trends')).getAnalyticsTrends(_analyticsPeriod);
-  google.script.run.withSuccessHandler(d => _onPart('cats',    d)).withFailureHandler(_onFail('cats')).getCategories();
-}
+  function _renderAnalytics(a) {
+    document.getElementById('analyticsLoading').style.display = 'none';
+    document.getElementById('analyticsGrid').style.display = '';
+    Object.values(_analyticsCharts).forEach(c => { try { c.destroy(); } catch (e) { } });
+    _analyticsCharts = {};
 
-function _emptyAnalyticsClient() {
-  return { totalSpent:0, totalTransactions:0, avgPerDay:0, avgPerTransaction:0,
-    topCategories:[], trends:[], shardCount:0 };
-}
-
-function _renderAnalytics(a) {
-  document.getElementById('analyticsLoading').style.display = 'none';
-  document.getElementById('analyticsGrid').style.display    = '';
-  Object.values(_analyticsCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
-  _analyticsCharts = {};
-
-  document.getElementById('analyticsSummary').innerHTML = `
+    document.getElementById('analyticsSummary').innerHTML = `
     <div class="stats-row">
       <div class="stat-card accent-green">
         <div class="stat-label">Total Spent</div>
@@ -243,128 +321,165 @@ function _renderAnalytics(a) {
       </div>
     </div>`;
 
-  // Daily bar
-  const trends = a.trends || [];
-  _analyticsCharts.bar = makeBarChart('aBarChart',
-    trends.map(t => { const d = new Date(t.date); return `${d.getDate()}/${d.getMonth()+1}`; }),
-    trends.map(t => t.amount));
+    // Daily bar
+    const trends = a.trends || [];
+    _analyticsCharts.bar = makeBarChart('aBarChart',
+      trends.map(t => { const d = new Date(t.date); return `${d.getDate()}/${d.getMonth() + 1}`; }),
+      trends.map(t => t.amount));
 
-  // Donut — all non-zero categories, legend on the side
-  const allCats = (a.topCategories || []).filter(c => c.amount > 0);
-  _analyticsCharts.donut = makeDonutChart('aDonutChart',
-    allCats.map(c => c.category),
-    allCats.map(c => c.amount),
-    CHART_COLORS.slice(0, allCats.length)
-  );
-  document.getElementById('aDonutLegend').innerHTML = allCats.map((c, i) =>
-    `<div class="legend-item">
+    // Donut — all non-zero categories, legend on the side
+    const allCats = (a.topCategories || []).filter(c => c.amount > 0);
+    _analyticsCharts.donut = makeDonutChart('aDonutChart',
+      allCats.map(c => c.category),
+      allCats.map(c => c.amount),
+      CHART_COLORS.slice(0, allCats.length)
+    );
+    document.getElementById('aDonutLegend').innerHTML = allCats.map((c, i) =>
+      `<div class="legend-item">
       <div class="legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></div>
       <span class="legend-label">${esc(c.category)}</span>
       <span class="legend-val">${fmt(c.amount)}</span>
     </div>`).join('');
 
-  const catIconMap = {};
-  _analyticsCategories.forEach(c => catIconMap[c.name] = c.icon);
-  document.getElementById('aCategoryBreakdown').innerHTML = (a.topCategories || []).map((c, i) =>
-    `<div class="breakdown-item">
+    const catIconMap = {};
+    _analyticsCategories.forEach(c => catIconMap[c.name] = c.icon);
+    document.getElementById('aCategoryBreakdown').innerHTML = (a.topCategories || []).map((c, i) =>
+      `<div class="breakdown-item">
       <div class="breakdown-header">
         <span class="breakdown-label">${catIconMap[c.category] || '📦'} ${esc(c.category)}</span>
         <div class="breakdown-values"><span class="breakdown-pct">${c.percentage}%</span><span class="breakdown-amt">${fmt(c.amount)}</span></div>
       </div>
       <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${c.percentage}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"></div></div>
     </div>`).join('');
-}
-
-// ── Monthly Comparison Table ─────────────────────────────────
-function _loadComparison() {
-  document.getElementById('comparisonLoading').style.display    = '';
-  document.getElementById('comparisonTableWrap').style.display  = 'none';
-
-  google.script.run
-    .withSuccessHandler(data => {
-      document.getElementById('comparisonLoading').style.display   = 'none';
-      document.getElementById('comparisonTableWrap').style.display = '';
-      _renderComparisonTable(data);
-    })
-    .withFailureHandler(() => {
-      document.getElementById('comparisonLoading').textContent = 'Failed to load comparison.';
-    })
-    .getMonthlyComparison(_comparisonPeriod);
-}
-
-function _renderComparisonTable(d) {
-  const { months, categories, matrix, rowTotals, catTotals, catAverages,
-          budgetMap, incomeByMonth, grandTotal, grandAverage, monthCount } = d;
-
-  if (!months || months.length === 0) {
-    document.getElementById('comparisonTable').innerHTML =
-      '<tr><td style="padding:20px;color:var(--text3);">No data for this period.</td></tr>';
-    return;
   }
 
-  const fmtC = v => v ? '₹' + parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
-  const monthLabel = m => new Date(m + '-02').toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+  // ── Monthly Comparison Table ─────────────────────────────────
+  function _loadComparison() {
+    document.getElementById('comparisonLoading').style.display = '';
+    document.getElementById('comparisonTableWrap').style.display = 'none';
 
-  let html = '<thead><tr>';
-  html += '<th>Month</th>';
-  categories.forEach(cat => { html += `<th>${esc(cat)}</th>`; });
-  html += '<th>Total</th><th>Income</th><th>Savings</th>';
-  html += '</tr></thead><tbody>';
+    // Load comparison data and SI committed data in parallel
+    let _compData = null, _siDone = false, _compDone = false;
 
-  // Data rows
-  months.forEach(m => {
-    const row    = matrix[m] || {};
-    const total  = rowTotals[m] || 0;
-    const income = incomeByMonth[m] || 0;
-    const saving = income - total;
-    html += '<tr>';
-    html += `<td>${monthLabel(m)}</td>`;
-    categories.forEach(cat => {
-      const val     = row[cat] || 0;
-      const budget  = budgetMap[cat] || 0;
-      const isOver  = budget > 0 && val > budget;
-      html += `<td class="${isOver ? 'cell-over' : ''}">${val > 0 ? fmtC(val) : '—'}</td>`;
+    function _tryRender() {
+      if (!_compDone || !_siDone) return;
+      document.getElementById('comparisonLoading').style.display = 'none';
+      document.getElementById('comparisonTableWrap').style.display = '';
+      _renderComparisonTable(_compData);
+    }
+
+    google.script.run
+      .withSuccessHandler(data => {
+        _compData = data; _compDone = true; _tryRender();
+      })
+      .withFailureHandler(() => {
+        document.getElementById('comparisonLoading').textContent = 'Failed to load comparison.';
+      })
+      .getMonthlyComparison(_comparisonPeriod);
+
+    google.script.run
+      .withSuccessHandler(c => {
+        window._siCommittedByCategory = (c && c.byCategory) || {};
+        _siDone = true; _tryRender();
+      })
+      .withFailureHandler(() => {
+        window._siCommittedByCategory = {};
+        _siDone = true; _tryRender();
+      })
+      .getCommittedMonthlyTotal();
+  }
+
+  function _renderComparisonTable(d) {
+    const { months, categories, matrix, rowTotals, catTotals, catAverages,
+      budgetMap, incomeByMonth, grandTotal, grandAverage, monthCount } = d;
+
+    if (!months || months.length === 0) {
+      document.getElementById('comparisonTable').innerHTML =
+        '<tr><td style="padding:20px;color:var(--text3);">No data for this period.</td></tr>';
+      return;
+    }
+
+    const fmtC = v => v ? '₹' + parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
+    const monthLabel = m => new Date(m + '-02').toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+
+    // Fetch SI committed data to add committed row — stored on window from analytics load
+    const siByCategory = (window._siCommittedByCategory) || {};
+    const siTotal = Object.values(siByCategory).reduce((s, v) => s + v, 0);
+    const hasCommitted = siTotal > 0;
+
+    let html = '<thead><tr>';
+    html += '<th>Month</th>';
+    categories.forEach(cat => { html += `<th>${esc(cat)}</th>`; });
+    html += '<th>Total</th><th>Income</th><th>Savings</th>';
+    html += '</tr></thead><tbody>';
+
+    // Data rows
+    months.forEach(m => {
+      const row = matrix[m] || {};
+      const total = rowTotals[m] || 0;
+      const income = incomeByMonth[m] || 0;
+      const saving = income - total;
+      html += '<tr>';
+      html += `<td>${monthLabel(m)}</td>`;
+      categories.forEach(cat => {
+        const val = row[cat] || 0;
+        const budget = budgetMap[cat] || 0;
+        const isOver = budget > 0 && val > budget;
+        html += `<td class="${isOver ? 'cell-over' : ''}">${val > 0 ? fmtC(val) : '—'}</td>`;
+      });
+      html += `<td style="font-weight:600;color:var(--text);">${fmtC(total)}</td>`;
+      html += `<td style="color:var(--accent2);">${income > 0 ? fmtC(income) : '—'}</td>`;
+      html += `<td class="${saving >= 0 ? 'savings-positive' : 'savings-negative'}">${income > 0 ? fmtC(saving) : '—'}</td>`;
+      html += '</tr>';
     });
-    html += `<td style="font-weight:600;color:var(--text);">${fmtC(total)}</td>`;
-    html += `<td style="color:var(--accent2);">${income > 0 ? fmtC(income) : '—'}</td>`;
-    html += `<td class="${saving >= 0 ? 'savings-positive' : 'savings-negative'}">${income > 0 ? fmtC(saving) : '—'}</td>`;
+
+    html += '</tbody><tfoot>';
+
+    // Total row
+    html += '<tr class="row-total"><td>Total</td>';
+    categories.forEach(cat => { html += `<td>${fmtC(catTotals[cat] || 0)}</td>`; });
+    const totalIncome = months.reduce((s, m) => s + (incomeByMonth[m] || 0), 0);
+    const totalSavings = totalIncome - grandTotal;
+    html += `<td>${fmtC(grandTotal)}</td>`;
+    html += `<td style="color:var(--accent2);">${totalIncome > 0 ? fmtC(totalIncome) : '—'}</td>`;
+    html += `<td class="${totalSavings >= 0 ? 'savings-positive' : 'savings-negative'}">${totalIncome > 0 ? fmtC(totalSavings) : '—'}</td>`;
     html += '</tr>';
-  });
 
-  html += '</tbody><tfoot>';
+    // Average row
+    html += '<tr class="row-avg"><td>Average</td>';
+    categories.forEach(cat => { html += `<td>${fmtC(catAverages[cat] || 0)}</td>`; });
+    const avgIncome = monthCount > 0 ? totalIncome / monthCount : 0;
+    const avgSavings = avgIncome - grandAverage;
+    html += `<td>${fmtC(grandAverage)}</td>`;
+    html += `<td>${avgIncome > 0 ? fmtC(avgIncome) : '—'}</td>`;
+    html += `<td class="${avgSavings >= 0 ? 'savings-positive' : 'savings-negative'}">${avgIncome > 0 ? fmtC(avgSavings) : '—'}</td>`;
+    html += '</tr>';
 
-  // Total row
-  html += '<tr class="row-total"><td>Total</td>';
-  categories.forEach(cat => { html += `<td>${fmtC(catTotals[cat] || 0)}</td>`; });
-  const totalIncome  = months.reduce((s, m) => s + (incomeByMonth[m] || 0), 0);
-  const totalSavings = totalIncome - grandTotal;
-  html += `<td>${fmtC(grandTotal)}</td>`;
-  html += `<td style="color:var(--accent2);">${totalIncome > 0 ? fmtC(totalIncome) : '—'}</td>`;
-  html += `<td class="${totalSavings >= 0 ? 'savings-positive' : 'savings-negative'}">${totalIncome > 0 ? fmtC(totalSavings) : '—'}</td>`;
-  html += '</tr>';
+    // Monthly budget row
+    html += '<tr class="row-budget"><td>Budget / mo</td>';
+    let totalBudget = 0;
+    categories.forEach(cat => {
+      const b = budgetMap[cat] || 0;
+      totalBudget += b;
+      html += `<td>${b > 0 ? fmtC(b) : '—'}</td>`;
+    });
+    html += `<td>${fmtC(totalBudget)}</td><td>—</td><td>—</td>`;
+    html += '</tr>';
 
-  // Average row
-  html += '<tr class="row-avg"><td>Average</td>';
-  categories.forEach(cat => { html += `<td>${fmtC(catAverages[cat] || 0)}</td>`; });
-  const avgIncome  = monthCount > 0 ? totalIncome / monthCount : 0;
-  const avgSavings = avgIncome - grandAverage;
-  html += `<td>${fmtC(grandAverage)}</td>`;
-  html += `<td>${avgIncome > 0 ? fmtC(avgIncome) : '—'}</td>`;
-  html += `<td class="${avgSavings >= 0 ? 'savings-positive' : 'savings-negative'}">${avgIncome > 0 ? fmtC(avgSavings) : '—'}</td>`;
-  html += '</tr>';
+    // Committed (SI) row — shows monthly-equivalent standing instruction amounts per category
+    if (hasCommitted) {
+      html += '<tr class="row-committed"><td>Committed</td>';
+      let committedTotal = 0;
+      categories.forEach(cat => {
+        const v = siByCategory[cat] || 0;
+        committedTotal += v;
+        html += `<td style="color:var(--accent4);">${v > 0 ? fmtC(v) : '—'}</td>`;
+      });
+      html += `<td style="color:var(--accent4);font-weight:600;">${fmtC(committedTotal)}</td><td>—</td><td>—</td>`;
+      html += '</tr>';
+    }
 
-  // Monthly Budget row
-  html += '<tr class="row-budget"><td>Budget / mo</td>';
-  let totalBudget = 0;
-  categories.forEach(cat => {
-    const b = budgetMap[cat] || 0;
-    totalBudget += b;
-    html += `<td>${b > 0 ? fmtC(b) : '—'}</td>`;
-  });
-  html += `<td>${fmtC(totalBudget)}</td><td>—</td><td>—</td>`;
-  html += '</tr>';
-
-  html += '</tfoot>';
-  document.getElementById('comparisonTable').innerHTML = html;
-}
+    html += '</tfoot>';
+    document.getElementById('comparisonTable').innerHTML = html;
+  }
 </script>

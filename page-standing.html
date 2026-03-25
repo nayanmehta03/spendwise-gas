@@ -396,6 +396,7 @@
             .withSuccessHandler(data => {
                 _siData = data;
                 _siCategories = data.categories || [];
+                _renderSICategoryGrid();
                 _loadAppCurrency(data.settings);
                 _renderUpcoming(data.upcoming || []);
                 _renderCommitted(data.committed || {});

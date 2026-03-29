@@ -106,7 +106,8 @@ function doGet(e) {
   return tmpl.evaluate()
     .setTitle('Spendwise')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
+    .setFaviconUrl('https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/refs/heads/main/screenshots/svgviewer-png-output.png');
 }
 
 function include(filename) {
@@ -301,59 +302,6 @@ function saveCategories(categories) {
   }
   invalidateCache(); // clears categories + all analytics
   return { success: true, message: 'Categories saved.' };
-}
-
-// ============================================================
-// DATA MIGRATION: EMOJI/FA TO PHOSPHOR
-// ============================================================
-function runIconMigration() {
-  try {
-    const ss = getConfigSS();
-    const cfg = ss.getSheetByName(CATEGORIES_TAB);
-    if (!cfg) return { success: false, message: 'Categories sheet not found' };
-
-    // Mapping from old emojis / old FA names to new Phosphor names
-    const mapping = {
-      '🍔': 'fork-knife', 'utensils': 'fork-knife',
-      '🛒': 'shopping-cart', 'cart-shopping': 'shopping-cart',
-      '🚗': 'car',
-      '🛍️': 'tote', 'bag-shopping': 'tote', '🛍': 'tote',
-      '💊': 'heartbeat', 'heart-pulse': 'heartbeat',
-      '🎬': 'film-strip', 'film': 'film-strip',
-      '📱': 'device-mobile', 'mobile-screen': 'device-mobile',
-      '💡': 'lightbulb',
-      '🏠': 'house',
-      '✈️': 'airplane', 'plane': 'airplane', '✈': 'airplane',
-      '🎁': 'gift',
-      '📈': 'trend-up', 'chart-line': 'trend-up',
-      '💼': 'briefcase',
-      '📦': 'package', 'box-open': 'package',
-      '💰': 'coins',
-      '🎯': 'target', 'bullseye': 'target'
-    };
-
-    const data = cfg.getDataRange().getValues();
-    let migrated = 0;
-
-    // Skip header row usually, but let's just check the whole column safely
-    // Column B is the icon column (index 1) according to existing code logic
-    // Wait, let's verify column layout: 'Category', 'Icon', 'Budget'
-    // in saveCategories we write: [c.name || '', c.icon || 'package', parseFloat(c.budget) || 0]
-    // So Name=Col 1, Icon=Col 2 (index 1), Budget=Col 3
-
-    for (let i = 1; i < data.length; i++) {
-      const currentIcon = String(data[i][1]).trim();
-      if (mapping[currentIcon]) {
-        cfg.getRange(i + 1, 2).setValue(mapping[currentIcon]);
-        migrated++;
-      }
-    }
-
-    SCRIPT_CACHE.remove('categories');
-    return { success: true, count: migrated };
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
 }
 
 // ── Settings ─────────────────────────────────────────────────
@@ -1818,9 +1766,9 @@ function runSetup() {
   }
 }
 
-// runRepair — merges UPDATE + RESET into one safe operation.
+// runRepair — merges cache clearing + recovery into one safe operation.
 // Runs all recovery steps: cache clear, shard re-derive, tab
-// verification, schema migrations, trigger reinstall.
+// verification, trigger reinstall.
 // No data is modified or deleted. Safe to run anytime.
 function runRepair() {
   try {

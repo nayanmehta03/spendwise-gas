@@ -918,6 +918,29 @@
     border-color: var(--accent);
   }
 
+  .action-btn:disabled,
+  .action-btn.loading {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-btn.loading {
+    position: relative;
+    color: transparent !important;
+  }
+
+  .action-btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
   .empty-state {
     text-align: center;
     padding: 48px 24px;

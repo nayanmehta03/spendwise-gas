@@ -191,7 +191,7 @@
     document.getElementById('editNotes').value = e.notes || '';
 
     document.getElementById('editCategory').innerHTML = _editCatList.map(c =>
-      `<option value="${esc(c.name)}" ${c.name === e.category ? 'selected' : ''}>${c.icon} ${esc(c.name)}</option>`
+      `<option value="${esc(c.name)}" ${c.name === e.category ? 'selected' : ''}>${esc(c.name)}</option>`
     ).join('');
 
     document.getElementById('editPayment').value = e.paymentMethod || 'Cash';

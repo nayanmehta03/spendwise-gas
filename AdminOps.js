@@ -7,7 +7,7 @@
 //   SETUP()                    — first-time only, creates all sheets
 //   STATUS()                   — health check for all components
 //   RESET()                    — cache + registry recovery
-//   UPDATE()                   — schema migrations after a code update
+
 //   importFromCSV()            — bulk import historical expense data
 //   forceReimportFromCSV()     — wipe existing rows and reimport
 //   fixShardRegistry()         — reorder + validate shard registry
@@ -233,7 +233,7 @@ function STATUS() {
     log.push('  ⚠ No triggers found — run SETUP() or setupMonthlyRotationTrigger()');
   } else {
     log.push('  ' + (hasRotation ? '✓' : '✗') + ' Monthly shard rotation');
-    log.push('  ' + (hasSI ? '✓' : '⚠') + ' Daily standing instructions auto-log' + (hasSI ? '' : ' — run UPDATE() to install'));
+    log.push('  ' + (hasSI ? '✓' : '⚠') + ' Daily standing instructions auto-log' + (hasSI ? '' : ' — run RESET() to install'));
     if (hasWeeklyRpt) {
       const wt = triggers.find(t => t.getHandlerFunction() === 'weeklyReportTrigger');
       log.push('  ✓ Weekly email report (trigger id: ' + wt.getUniqueId().substring(0, 12) + '...)');
@@ -346,80 +346,6 @@ function RESET() {
 }
 
 
-// ── UPDATE ───────────────────────────────────────────────────
-// Run after pulling new source code. Applies schema migrations
-// (idempotent — safe to re-run), verifies tabs, clears cache.
-function UPDATE() {
-  const log = [];
-  log.push('=== SPENDWISE UPDATE ===');
-  log.push('Running at ' + new Date().toLocaleString());
-  log.push('');
-
-  // Ensure Income tab exists (added in v1.0.0)
-  try {
-    const ss = getConfigSS();
-    if (!ss.getSheetByName('Income')) {
-      const sheet = ss.insertSheet('Income');
-      const headers = ['ID', 'Date', 'Category', 'Description', 'Amount', 'Notes', 'Timestamp'];
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
-      sheet.setFrozenRows(1);
-      log.push('✓ Income tab created');
-    } else {
-      log.push('✓ Income tab: present');
-    }
-  } catch (e) {
-    log.push('✗ Income tab check failed: ' + e.message);
-  }
-
-  // Ensure all shard sheets have Expenses tab
-  try {
-    const records = _getAllShardRecords();
-    records.forEach(r => {
-      try { _ensureShardSheet(SpreadsheetApp.openById(r.id)); }
-      catch (e) { log.push('⚠ Could not verify shard ' + r.label + ': ' + e.message); }
-    });
-    log.push('✓ All ' + records.length + ' shard Expenses tabs verified');
-  } catch (e) {
-    log.push('⚠ Shard check failed: ' + e.message);
-  }
-
-  // Ensure rotation trigger installed
-  try {
-    const existing = ScriptApp.getProjectTriggers()
-      .filter(t => t.getHandlerFunction() === 'rotateShardForNewMonth');
-    if (existing.length === 0) {
-      _installRotationTrigger();
-      log.push('✓ Rotation trigger installed');
-    } else {
-      log.push('✓ Rotation trigger: present');
-    }
-  } catch (e) {
-    log.push('⚠ Trigger check failed: ' + e.message);
-  }
-
-  // Ensure daily SI trigger installed
-  try {
-    const hasSI = ScriptApp.getProjectTriggers()
-      .some(t => t.getHandlerFunction() === 'processStandingInstructions');
-    if (!hasSI) {
-      _installSITrigger();
-      log.push('✓ Daily SI trigger installed');
-    } else {
-      log.push('✓ Daily SI trigger: present');
-    }
-  } catch (e) {
-    log.push('⚠ SI trigger check failed: ' + e.message);
-  }
-
-  purgeAllCache();
-  log.push('✓ Cache cleared');
-  log.push('');
-  log.push('=== UPDATE COMPLETE ===');
-  log.push('Redeploy the web app to apply changes.');
-  Logger.log(log.join('\n'));
-  return { success: true };
-}
 
 
 // Deletes and recreates the monthly rotation trigger.
@@ -450,7 +376,7 @@ function setupMonthlyRotationTrigger() {
 // Validates every registered shard, removes inaccessible ones,
 // rewrites the registry in chronological order, and updates
 // ACTIVE_SHARD_ID / OLDEST_SHARD_ID in Script Properties.
-// Run after bulk import, shard deletion, or shard migration.
+// Run after bulk import, shard deletion, or registry inconsistency.
 function fixShardRegistry() {
   const log = [];
   const tz = Session.getScriptTimeZone();

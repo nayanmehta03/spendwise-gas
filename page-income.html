@@ -317,7 +317,7 @@
             <div class="income-amount">+${fmt(r.amount)}</div>
             <div class="expense-date">${formatDate(r.date)}</div>
           </div>
-          <div class="expense-actions">
+          <div class="expense-actions" id="inc-actions-${esc(r.id)}">
             <button class="action-btn edit" onclick="_editIncome('${esc(r.id)}')" title="Edit">✎</button>
             <button class="action-btn" onclick="_deleteIncome('${esc(r.id)}')" title="Delete">✕</button>
           </div>
@@ -443,17 +443,28 @@
   }
 
   // ── Delete ───────────────────────────────────────────────────
+  function _setIncActionsLoading(id, loading) {
+    const wrap = document.getElementById('inc-actions-' + id);
+    if (!wrap) return;
+    wrap.querySelectorAll('.action-btn').forEach(b => {
+      b.disabled = loading;
+      if (loading) b.classList.add('loading');
+      else b.classList.remove('loading');
+    });
+  }
+
   function _deleteIncome(id) {
     if (!confirm('Delete this income entry?')) return;
+    _setIncActionsLoading(id, true);
     google.script.run
       .withSuccessHandler(r => {
         if (r.success) {
           _incAllIncome = _incAllIncome.filter(x => x.id !== id);
           _renderIncomeList(_incAllIncome);
           showToast('Deleted', 'success');
-        } else { showToast('Delete failed', 'error'); }
+        } else { _setIncActionsLoading(id, false); showToast('Delete failed', 'error'); }
       })
-      .withFailureHandler(() => showToast('Delete failed', 'error'))
+      .withFailureHandler(() => { _setIncActionsLoading(id, false); showToast('Delete failed', 'error'); })
       .deleteIncome(id);
   }
 </script>

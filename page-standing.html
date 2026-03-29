@@ -374,7 +374,8 @@
 
     const _FREQ_LABELS = {
         monthly: 'Monthly', weekly: 'Weekly',
-        quarterly: 'Quarterly', yearly: 'Yearly'
+        quarterly: 'Quarterly', yearly: 'Yearly',
+        custom: 'Custom'
     };
 
     function initStanding() {
@@ -513,7 +514,7 @@
             groups[grp].push(si);
         });
 
-        const order = ['monthly', 'weekly', 'quarterly', 'yearly'];
+        const order = ['monthly', 'weekly', 'quarterly', 'yearly', 'custom'];
         document.getElementById('siAllList').innerHTML = order
             .filter(f => groups[f] && groups[f].length)
             .map(f => {
@@ -546,7 +547,7 @@
       <div class="si-meta">${esc(si.category)} · ${freqStr}${monthlyStr}${endStr}${si.autoLog ? ' · auto' : ' · manual'}</div>
     </div>
     <div class="si-amount">${fmt(si.amount)}</div>
-    <div class="si-actions">
+    <div class="si-actions" id="si-actions-${esc(si.id)}">
       <button class="action-btn" title="${paused ? 'Resume' : 'Pause'}"
         onclick="_toggleSI('${esc(si.id)}', ${!si.isActive})">${paused ? '▶' : '⏸'}</button>
       <button class="action-btn edit" title="Edit"
@@ -689,27 +690,39 @@
         }
     }
 
+    function _setSIActionsLoading(id, loading) {
+        const wrap = document.getElementById('si-actions-' + id);
+        if (!wrap) return;
+        wrap.querySelectorAll('.action-btn').forEach(b => {
+            b.disabled = loading;
+            if (loading) b.classList.add('loading');
+            else b.classList.remove('loading');
+        });
+    }
+
     function _deleteSI(id) {
         const si = (_siData && _siData.all || []).find(s => s.id === id);
         if (!confirm('Delete "' + (si ? si.name : id) + '"? This cannot be undone.')) return;
+        _setSIActionsLoading(id, true);
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) { showToast('Deleted', 'success'); _loadStanding(); }
-                else showToast('Delete failed', 'error');
+                else { _setSIActionsLoading(id, false); showToast('Delete failed', 'error'); }
             })
-            .withFailureHandler(() => showToast('Delete failed', 'error'))
+            .withFailureHandler(() => { _setSIActionsLoading(id, false); showToast('Delete failed', 'error'); })
             .deleteStandingInstruction(id);
     }
 
     function _toggleSI(id, setActive) {
+        _setSIActionsLoading(id, true);
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
                     showToast(setActive ? 'Resumed' : 'Paused', 'success');
                     _loadStanding();
-                } else showToast('Failed', 'error');
+                } else { _setSIActionsLoading(id, false); showToast('Failed', 'error'); }
             })
-            .withFailureHandler(() => showToast('Failed', 'error'))
+            .withFailureHandler(() => { _setSIActionsLoading(id, false); showToast('Failed', 'error'); })
             .toggleStandingInstruction(id, setActive);
     }
 

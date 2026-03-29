@@ -1,253 +1,116 @@
+<!--
+  Spendwise — personal expense tracker, budget tracker, income tracker
+  Built with Google Apps Script and Google Sheets
+  Free, self-hosted, no server, no database, no subscription
+  Track expenses, manage budgets, view analytics, export CSV
+  Alternative to Mint, YNAB, Toshl for Google Workspace users
+-->
+
 <div align="center">
 
 # Spendwise
 
-**Personal expense manager that lives entirely in your Google account.**
+**Track your expenses and income — right inside your Google account.**
 
-No server. No subscription. No third-party database. Your data stays in your own Google Sheets.
+No server. No subscription. No third-party database.
+Your data stays in Google Sheets that you own.
 
-[![Made with Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?style=flat&logo=google&logoColor=white)](https://script.google.com)
-[![Version](https://img.shields.io/badge/version-1.0.0-6FCF97?style=flat)](#)
+[![Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?style=flat&logo=google&logoColor=white)](https://script.google.com)
+[![Version](https://img.shields.io/badge/version-1.1.0-6FCF97?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
 ---
 
-## What is Spendwise?
+Spendwise is a personal finance app that runs entirely on your Google account. You set it up once and use it like any web app — but everything is stored in your own Google Sheets and nothing ever leaves your Drive.
 
-Spendwise is a full-featured personal finance tracker built as a Google Apps Script web app. You deploy it once to your Google account and it runs there permanently — no hosting costs, no external services, no data leaving your Drive.
+It's free, private, and yours to keep.
 
-The interface is a fast single-page app. The backend is pure Apps Script. All expenses, income, categories, and settings are stored in Google Sheets that you own and can read directly.
+## What you get
 
----
+**Expense & income tracking** — Log what you spend and earn. Categorise entries, set monthly budgets per category, and see how you're doing.
 
-## Features
+![Expense Form](https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/main/screenshots/add_expense.png)
 
-**Expense tracking**
-- Add expenses with category, amount, date, payment method, and notes
-- Edit and delete any entry inline
-- Persistent category grid with emoji icons and custom monthly budgets
+**Dashboard** — See your monthly total, average spend per day, budget usage per category, and recent transactions at a glance.
 
-![Expense Form](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/add_expense.png)
+![Dashboard](https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/main/screenshots/budgets.png)
 
-**Dashboard**
-- Monthly spend total, average per day, top category at a glance
-- Budget progress bars per category — color coded by percentage used
-- 5 most recent transactions
+**Analytics** — Compare spending across months, view category breakdowns, and spot trends with charts. Filter by week, month, quarter, half year, or full year.
 
-![Dashboard-Budget](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/budgets.png)
+![Analytics](https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/main/screenshots/analytics.png)
 
-**Analytics**
-- 7 period presets: This Week, This Month, Last 30 Days, Quarter, Half Year, This Year, Last 12 Months
-- Category breakdown with percentage of total
-- Monthly comparison table — spend per category per month, with income and savings columns
-- Spending trends chart
+**Standing instructions** — Add recurring expenses (rent, subscriptions, EMIs) and have them logged automatically on their due date.
 
-![Charts](https://github.com/nayanmehta03/spendwise-gas/blob/main/screenshots/analytics.png)
+**Weekly email report** — Get a summary of your week's spending delivered to your inbox. Shows top categories, budget alerts, income, and comparison to last week.
 
-**Income tracking**
-- Log income with categories (Salary, Bonus, Miscellaneous)
-- Monthly summaries showing subtotals per category above the detail rows
-
-**Weekly email report** *(optional)*
-- Automatically sent on a day and time you choose
-- Shows spend vs last week, top categories with visual bars, budget alerts, income summary
-- Configured entirely from Settings — no code changes needed
-
-**Settings**
-- Currency symbol, default payment method, week start day
-- Category editor — add, rename, reorder, set budgets
-- Full data export to CSV across all historical data
-- System panel — run SETUP, STATUS, and REPAIR from within the app
+**Full data export** — Download all your expenses as a CSV file any time from Settings.
 
 ---
 
-## Why Google Sheets as a database?
+## Self-hosting (setup)
 
-| Concern | Answer |
-|---|---|
-| **Data ownership** | Everything is in your Google Drive. Export, delete, or inspect it any time. |
-| **Cost** | Free. Google Apps Script and Google Sheets have no usage cost at personal scale. |
-| **Privacy** | No third party ever sees your financial data. |
-| **Durability** | Google Sheets has versioning built in. You can roll back any accidental change. |
-| **Transparency** | You can open the sheet and read the raw data directly — no black box. |
+You need a Google account. That's it.
 
----
+1. Go to [script.google.com](https://script.google.com) and create a **New Project**
+2. Delete the default code. Create one file for each file in this repo and paste the contents:
+   - `Code.gs` and `AdminOps.gs` (script files)
+   - `index.html`, `shared-styles.html`, `shared-nav.html` (shared files)
+   - `page-add.html`, `page-dashboard.html`, `page-expenses.html`, `page-analytics.html`, `page-income.html`, `page-standing.html`, `page-settings.html` (pages)
 
-## How it works
+   > To add an HTML file: click **+** next to Files → **HTML** → type the name without `.html`
 
-```
-Browser  ──── HTTPS ────▶  Google Apps Script (your account)
-                                    │
-                         ┌──────────┴──────────┐
-                         │                     │
-                   Config Sheet          Shard Sheets
-                  (one, permanent)      (one per month)
-                  ┌─────────────┐      ┌──────────────┐
-                  │ Categories  │      │   Expenses   │
-                  │ Settings    │      └──────────────┘
-                  │ Income      │
-                  │ Registry    │
-                  └─────────────┘
-```
+3. Open `AdminOps.gs`, select **SETUP** from the function dropdown, and click **Run**
+4. Google will ask you to authorise — click **Review permissions** → choose your account → **Allow**
+5. Check the **Execution Log** for confirmation. Two Google Sheets will be created in your Drive automatically.
+6. Click **Deploy** → **New Deployment** → type: **Web App** → set:
+   - Execute as: **Me**
+   - Who has access: **Only myself**
+7. Click **Deploy** and copy the URL. Open it. Done.
 
-Expenses are stored in **monthly shard sheets** — a separate Google Spreadsheet per month. This keeps performance fast as data grows and lets analytics skip irrelevant months entirely when computing date-range queries.
+> **What does "Who has access" mean?**
+>
+> This controls who can *open* the web app URL — it does **not** share your spreadsheet data.
+>
+> | Option | Who can open the app | When to use |
+> |---|---|---|
+> | **Only myself** | Just your Google account | **Recommended.** Personal use. |
+> | **Anyone with Google account** | Anyone signed into Google, but they see *your* data since it runs as you | Only if you want to share the app with family/friends |
+> | **Anyone** | Opens without sign-in | Not recommended — anyone with the URL can see your expenses |
+>
+> In all cases the app runs as **you** and reads **your** sheets. "Only myself" is the safest choice.
 
----
+### After setup
 
-## Installation
+**Change your settings** — Go to Settings in the app to set your currency, default payment method, and edit categories/budgets.
 
-### Prerequisites
+**Enable weekly email reports** — Go to Settings → Weekly Email Report, toggle it on, and enter your email. You'll need to grant Gmail permission once from the script editor (Run any function → Allow when prompted).
 
-- A Google account
-- Access to [Google Apps Script](https://script.google.com)
+**Import existing data** — If you have historical expenses in CSV format, open `AdminOps.gs`, paste the CSV contents into the `_getImportRows()` function, and run `importFromCSV()`.
 
-### Steps
-
-**1. Create a new Apps Script project**
-
-Go to [script.google.com](https://script.google.com) → New Project.
-
-**2. Add the files**
-
-Delete the default `Code.gs` content. Create files matching the project structure and paste the contents of each file from this repository:
-
-```
-Code.gs
-AdminOps.gs
-index.html
-shared-styles.html
-shared-nav.html
-page-add.html
-page-dashboard.html
-page-expenses.html
-page-analytics.html
-page-income.html
-page-settings.html
-```
-
-To create an HTML file in Apps Script: click the **+** next to Files → HTML → enter the filename without the `.html` extension (Apps Script adds it automatically).
-
-**3. Run SETUP()**
-
-In the editor, open `AdminOps.gs`. Select `SETUP` from the function dropdown and click **Run**.
-
-Apps Script will ask you to authorise the script — click **Review permissions**, choose your Google account, and click **Allow**.
-
-SETUP() will:
-- Create a **Config Sheet** in your Google Drive
-- Create the first monthly **Shard Sheet** for the current month
-- Seed all tabs with headers and default data
-- Install a monthly auto-rotation trigger
-
-Check the **Execution Log** — you will see the URLs of both created sheets.
-
-**4. Deploy as a Web App**
-
-- Click **Deploy** → **New Deployment**
-- Type: **Web App**
-- Execute as: **Me**
-- Who has access: **Anyone** *(or "Anyone with Google account" for private access)*
-- Click **Deploy** and copy the Web App URL
-
-**5. Open the app**
-
-Paste the URL into your browser. Spendwise is ready.
+**Something broken?** — Go to Settings → System and run **STATUS** (to check what's wrong) or **REPAIR** (to fix it). These are safe to run any time.
 
 ---
 
-## Optional: Enable the Weekly Email Report
+## Why Google Sheets?
 
-The weekly report requires Gmail send permission, which must be granted from the editor.
-
-1. In the Apps Script editor, select any function (e.g. `STATUS`) and click **Run**
-2. When the authorization dialog appears, click **Review permissions** → **Allow**
-3. In the app, go to **Settings → Weekly Email Report**
-4. Toggle **Enable**, enter your email address, choose day and time
-5. Click **Save Report Settings**
-
-The report fires automatically on your chosen schedule. Click **Send Test Email** to preview it immediately.
+- **It's free** — no hosting costs, no subscriptions
+- **You own your data** — it's in your Google Drive, readable as a normal spreadsheet
+- **It's private** — no third party sees your financial data
+- **Built-in backups** — Google Sheets tracks version history automatically
 
 ---
 
-## First-run configuration
+## Good to know
 
-| Setting | Where | Recommendation |
-|---|---|---|
-| Currency symbol | Settings → General | Change from ₹ to your local symbol |
-| Default payment | Settings → General | Set your most-used payment method |
-| Categories | Settings → Categories & Budgets | Edit names, icons, and set monthly budget limits |
-
----
-
-## Importing historical data
-
-If you have existing expense data in a CSV, use `importFromCSV()` in `AdminOps.gs`:
-
-1. Format your CSV with columns: `ID, Date, Category, Description, Amount, PaymentMethod, Notes, Timestamp`
-2. Open `AdminOps.gs` and find `_getImportRows()` at the bottom of the file
-3. Paste your CSV contents between the backticks
-4. Run `importFromCSV()` from the editor — it skips rows with duplicate IDs
-5. Run `fixShardRegistry()` to reorder the shard registry chronologically
-
----
-
-## Maintenance
-
-All routine maintenance is accessible from **Settings → System** in the app itself.
-
-| Action | When | How |
-|---|---|---|
-| **STATUS** | Something seems wrong | Settings → System → Run STATUS |
-| **REPAIR** | Expenses not loading, cache issues | Settings → System → Run REPAIR |
-| **UPDATE** | After pulling a new version | Run `UPDATE()` in AdminOps.gs, then redeploy |
-| **Rotate shard manually** | Auto-rotation missed | Settings → Data & Shards → Rotate Shard Now |
-
----
-
-## Project structure
-
-```
-Code.gs              Runtime backend — all server functions
-AdminOps.gs          Editor-only tools: setup, diagnostics, import
-index.html           SPA shell — router, nav, floating add button
-shared-styles.html   All CSS
-shared-nav.html      Shared JS — toast, edit modal, payment methods, formatters
-page-add.html        Add Expense page
-page-dashboard.html  Dashboard
-page-expenses.html   Expenses list with filters
-page-analytics.html  Analytics and charts
-page-income.html     Income tracker
-page-settings.html   Settings, system panel, weekly report config
-```
-
----
-
-## Limitations
-
-- **Single user** — designed for one Google account. Multi-user deployments are possible but not supported out of the box.
-- **Apps Script quotas** — the free tier allows 6 minutes of script execution per day and 100 email recipients per day. For personal use this is never a constraint.
-- **No real-time sync** — changes made in one browser tab don't auto-refresh another open tab.
-- **No offline support** — requires an internet connection to the Google APIs.
-
----
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | Google Apps Script (V8) |
-| Frontend | Vanilla HTML / CSS / JS — single-page app |
-| Charts | Chart.js (loaded lazily on Analytics page) |
-| Backend | Apps Script server functions via `google.script.run` |
-| Database | Google Sheets |
-| Cache | `CacheService.getScriptCache()` |
-| Email | `MailApp.sendEmail()` |
-| Auth | Google account (implicit via deployment settings) |
+- Designed for **one person** (single Google account)
+- Needs an **internet connection** — no offline mode
+- If you have the app open in two tabs, changes in one won't auto-show in the other — just refresh
+- Google Apps Script has daily limits (6 min execution, 100 emails) but personal use never hits them
 
 ---
 
 ## License
 
-MIT — use it, modify it, build on it. A mention is appreciated but not required.
+MIT — use it however you want.

@@ -223,7 +223,7 @@
               <div class="expense-amount">${fmt(e.amount)}</div>
               <div class="expense-date">${formatDate(e.date)}</div>
             </div>
-            <div class="expense-actions">
+            <div class="expense-actions" id="exp-actions-${esc(e.id)}">
               <button class="action-btn edit" onclick="_expEdit('${esc(e.id)}')" title="Edit"><i class="ph ph-pencil-simple"></i></button>
               <button class="action-btn" onclick="_expDelete('${esc(e.id)}')" title="Delete"><i class="ph ph-x"></i></button>
             </div>
@@ -250,8 +250,19 @@
     });
   }
 
+  function _setExpActionsLoading(id, loading) {
+    const wrap = document.getElementById('exp-actions-' + id);
+    if (!wrap) return;
+    wrap.querySelectorAll('.action-btn').forEach(b => {
+      b.disabled = loading;
+      if (loading) b.classList.add('loading');
+      else b.classList.remove('loading');
+    });
+  }
+
   function _expDelete(id) {
     if (!confirm('Delete this expense?')) return;
+    _setExpActionsLoading(id, true);
     google.script.run
       .withSuccessHandler(r => {
         if (r.success) {
@@ -259,10 +270,11 @@
           _renderExpenses(_applyClientFilters(_expAllExpenses));
           showToast('Deleted', 'success');
         } else {
+          _setExpActionsLoading(id, false);
           showToast('Delete failed', 'error');
         }
       })
-      .withFailureHandler(() => showToast('Delete failed', 'error'))
+      .withFailureHandler(() => { _setExpActionsLoading(id, false); showToast('Delete failed', 'error'); })
       .deleteExpense(id);
   }
 

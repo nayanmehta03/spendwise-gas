@@ -7,6 +7,11 @@
 //   SETUP()                    — first-time only, creates all sheets
 //   STATUS()                   — health check for all components
 //   RESET()                    — cache + registry recovery
+//
+//   installEmailIngestionTrigger()   — set up email receipt scanning
+//   installDailySummaryTrigger()     — set up daily Chat summary
+//   removeEmailIngestionTrigger()    — remove email scanning trigger
+//   removeDailySummaryTrigger()      — remove daily summary trigger
 
 //   importFromCSV()            — bulk import historical expense data
 //   forceReimportFromCSV()     — wipe existing rows and reimport
@@ -84,6 +89,32 @@ function SETUP() {
     log.push('⚠ SI trigger install failed: ' + e.message);
   }
 
+  // Install email ingestion trigger if enabled
+  try {
+    const settings = getSettings();
+    if (settings.emailIngestionEnabled === 'true') {
+      installEmailIngestionTrigger();
+      log.push('✓ Email ingestion trigger installed');
+    } else {
+      log.push('○ Email ingestion: not enabled (set emailIngestionEnabled=true in Settings)');
+    }
+  } catch (e) {
+    log.push('⚠ Email ingestion trigger install failed: ' + e.message);
+  }
+
+  // Install daily summary trigger if enabled
+  try {
+    const settings = getSettings();
+    if (settings.dailySummaryEnabled === 'true') {
+      installDailySummaryTrigger();
+      log.push('✓ Daily summary trigger installed');
+    } else {
+      log.push('○ Daily Chat summary: not enabled (set dailySummaryEnabled=true in Settings)');
+    }
+  } catch (e) {
+    log.push('⚠ Daily summary trigger install failed: ' + e.message);
+  }
+
   // Smoke test
   try {
     const cats = getCategories();
@@ -154,7 +185,8 @@ function STATUS() {
     const tabs = ss.getSheets().map(s => s.getName());
     log.push('  ✓ Accessible: ' + ss.getName());
     log.push('  Tabs found   : ' + tabs.join(', '));
-    ['Categories', 'ShardRegistry', 'Settings', 'Income', 'StandingInstructions'].forEach(t => {
+  ['Categories', 'ShardRegistry', 'Settings', 'Income', 'StandingInstructions',
+       'KeywordMap', 'EmailSources', 'Logs'].forEach(t => {
       log.push('  ' + (tabs.includes(t) ? '✓' : '✗ MISSING') + ' ' + t + ' tab');
     });
   } catch (e) {
@@ -248,6 +280,30 @@ function STATUS() {
         log.push('  ○ Weekly email report (not enabled)');
       }
     }
+
+    // Email ingestion trigger
+    const hasEmailIngestion = triggers.some(t => t.getHandlerFunction() === 'processEmailReceipts');
+    const emailSettings = getSettings();
+    if (emailSettings.emailIngestionEnabled === 'true') {
+      log.push('  ' + (hasEmailIngestion ? '✓' : '⚠') + ' Email ingestion: ' + (hasEmailIngestion ? 'active' : 'ENABLED but no trigger — run RESET()'));
+    } else {
+      log.push('  ○ Email ingestion (not enabled)');
+    }
+
+    // Daily summary trigger
+    const hasDailySummary = triggers.some(t => t.getHandlerFunction() === 'sendDailySummary');
+    if (emailSettings.dailySummaryEnabled === 'true') {
+      log.push('  ' + (hasDailySummary ? '✓' : '⚠') + ' Daily Chat summary: ' + (hasDailySummary ? 'active (' + (emailSettings.dailySummaryTime || '21') + ':00)' : 'ENABLED but no trigger — run RESET()'));
+    } else {
+      log.push('  ○ Daily Chat summary (not enabled)');
+    }
+
+    // Chat integration
+    if (emailSettings.chatEnabled === 'true') {
+      log.push('  ✓ Chat integration: enabled' + (emailSettings.chatSpaceId ? ' (space: ' + emailSettings.chatSpaceId.substring(0, 20) + '...)' : ' (no space ID yet — message the bot)'));
+    } else {
+      log.push('  ○ Chat integration (not enabled)');
+    }
   }
 
   // ── Cache ──────────────────────────────────────────────────
@@ -337,6 +393,40 @@ function RESET() {
     log.push('⚠ SI trigger check failed: ' + e.message);
   }
 
+  // Reinstall email ingestion trigger if enabled but missing
+  try {
+    const settings = getSettings();
+    if (settings.emailIngestionEnabled === 'true') {
+      const hasEmail = ScriptApp.getProjectTriggers()
+        .some(t => t.getHandlerFunction() === 'processEmailReceipts');
+      if (!hasEmail) {
+        installEmailIngestionTrigger();
+        log.push('✓ Email ingestion trigger reinstalled');
+      } else {
+        log.push('✓ Email ingestion trigger: present');
+      }
+    }
+  } catch (e) {
+    log.push('⚠ Email ingestion trigger check failed: ' + e.message);
+  }
+
+  // Reinstall daily summary trigger if enabled but missing
+  try {
+    const settings = getSettings();
+    if (settings.dailySummaryEnabled === 'true') {
+      const hasSummary = ScriptApp.getProjectTriggers()
+        .some(t => t.getHandlerFunction() === 'sendDailySummary');
+      if (!hasSummary) {
+        installDailySummaryTrigger();
+        log.push('✓ Daily summary trigger reinstalled');
+      } else {
+        log.push('✓ Daily summary trigger: present');
+      }
+    }
+  } catch (e) {
+    log.push('⚠ Daily summary trigger check failed: ' + e.message);
+  }
+
   log.push('');
   log.push('=== RESET COMPLETE ===');
   log.push('Run STATUS() to verify.');
@@ -369,6 +459,65 @@ function setupMonthlyRotationTrigger() {
   _installRotationTrigger();
   Logger.log('✓ Monthly rotation trigger set for rotateShardForNewMonth on day 1 of each month.');
   return 'Monthly rotation trigger installed.';
+}
+
+// ── Email Ingestion Trigger ──────────────────────────────────
+function installEmailIngestionTrigger() {
+  // Remove existing
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'processEmailReceipts')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  const settings = getSettings();
+  const interval = parseInt(settings.emailIngestionIntervalMinutes) || 15;
+
+  const triggerBuilder = ScriptApp.newTrigger('processEmailReceipts').timeBased();
+  if (interval === 60) {
+    triggerBuilder.everyHours(1).create();
+    Logger.log('✓ Email ingestion trigger set: every hour');
+  } else {
+    triggerBuilder.everyMinutes(interval).create();
+    Logger.log('✓ Email ingestion trigger set: every ' + interval + ' minutes');
+  }
+
+  return { success: true, interval };
+}
+
+function removeEmailIngestionTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'processEmailReceipts')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  Logger.log('✓ Email ingestion trigger removed');
+  return { success: true };
+}
+
+// ── Daily Summary Trigger ────────────────────────────────────
+function installDailySummaryTrigger() {
+  // Remove existing
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'sendDailySummary')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  const settings = getSettings();
+  const hour = parseInt(settings.dailySummaryTime) || 21;
+
+  ScriptApp.newTrigger('sendDailySummary')
+    .timeBased()
+    .everyDays(1)
+    .atHour(hour)
+    .nearMinute(0)
+    .create();
+
+  Logger.log('✓ Daily summary trigger set: every day at ' + hour + ':00');
+  return { success: true, hour };
+}
+
+function removeDailySummaryTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'sendDailySummary')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  Logger.log('✓ Daily summary trigger removed');
+  return { success: true };
 }
 
 

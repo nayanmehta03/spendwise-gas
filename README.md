@@ -16,7 +16,7 @@ No server. No subscription. No third-party database.
 Your data stays in Google Sheets that you own.
 
 [![Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?style=flat&logo=google&logoColor=white)](https://script.google.com)
-[![Version](https://img.shields.io/badge/version-1.1.0-6FCF97?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.2.0-6FCF97?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -45,69 +45,146 @@ It's free, private, and yours to keep.
 
 **Weekly email report** — Get a summary of your week's spending delivered to your inbox. Shows top categories, budget alerts, income, and comparison to last week.
 
+**Google Chat App Integration (New in v1.2.0)** — Log expenses directly from Google Chat using quick messages or slash commands like `/spend` and `/summary`. Receive a daily automated summary of your budget directly in your chat.
+
+**Automated Gmail Receipt Ingestion (New in v1.2.0)** — Automatically scan your Gmail for purchase receipts (e.g. Swiggy, Zomato, Amazon, or custom keywords/senders) and import them. Features duplicate detection, keyword-to-category mapping, and robust execution logs.
+
 **Full data export** — Download all your expenses as a CSV file any time from Settings.
 
 ---
 
-## Self-hosting (setup)
+## Upgrading from v1.1.0 (Keeping Data Intact)
 
-You need a Google account. That's it.
+Upgrading to v1.2.0 is **fully backwards compatible**. None of your existing expenses, categories, settings, or standing instructions will be touched.
 
-1. Go to [script.google.com](https://script.google.com) and create a **New Project**
-2. Delete the default code. Create one file for each file in this repo and paste the contents:
-   - `Code.gs` and `AdminOps.gs` (script files)
-   - `index.html`, `shared-styles.html`, `shared-nav.html` (shared files)
-   - `page-add.html`, `page-dashboard.html`, `page-expenses.html`, `page-analytics.html`, `page-income.html`, `page-standing.html`, `page-settings.html` (pages)
+### Step 1: Enable the manifest file
+1. Open your existing Google Apps Script project at [script.google.com](https://script.google.com).
+2. Click the gear icon (**Project Settings**) on the left sidebar.
+3. Check the box **"Show 'appsscript.json' manifest file in editor"**.
 
-   > To add an HTML file: click **+** next to Files → **HTML** → type the name without `.html`
+### Step 2: Update the files
+1. Go back to the Editor tab (**< >** icon).
+2. Paste the updated contents for `Code.gs`, `AdminOps.gs`, `page-settings.html`, and `shared-styles.html` from this repository.
+3. Create two new script files:
+   - Click the **+** icon next to Files → **Script** → name it `ChatHandler` (do not add `.gs`) → paste `ChatHandler.js` content.
+   - Click the **+** icon next to Files → **Script** → name it `EmailIngestion` (do not add `.gs`) → paste `EmailIngestion.js` content.
+4. Open the `appsscript.json` file in the editor and replace its contents entirely with the project's `appsscript.json` (this adds the necessary OAuth scopes and enables the Chat service).
 
-3. Open `AdminOps.gs`, select **SETUP** from the function dropdown, and click **Run**
-4. Google will ask you to authorise — click **Review permissions** → choose your account → **Allow**
-5. Check the **Execution Log** for confirmation. Two Google Sheets will be created in your Drive automatically.
-6. Click **Deploy** → **New Deployment** → type: **Web App** → set:
-   - Execute as: **Me**
-   - Who has access: **Only myself**
-7. Click **Deploy** and copy the URL. Open it. Done.
-
-> **What does "Who has access" mean?**
->
-> This controls who can *open* the web app URL — it does **not** share your spreadsheet data.
->
-> | Option | Who can open the app | When to use |
-> |---|---|---|
-> | **Only myself** | Just your Google account | **Recommended.** Personal use. |
-> | **Anyone with Google account** | Anyone signed into Google, but they see *your* data since it runs as you | Only if you want to share the app with family/friends |
-> | **Anyone** | Opens without sign-in | Not recommended — anyone with the URL can see your expenses |
->
-> In all cases the app runs as **you** and reads **your** sheets. "Only myself" is the safest choice.
-
-### After setup
-
-**Change your settings** — Go to Settings in the app to set your currency, default payment method, and edit categories/budgets.
-
-**Enable weekly email reports** — Go to Settings → Weekly Email Report, toggle it on, and enter your email. You'll need to grant Gmail permission once from the script editor (Run any function → Allow when prompted).
-
-**Import existing data** — If you have historical expenses in CSV format, open `AdminOps.gs`, paste the CSV contents into the `_getImportRows()` function, and run `importFromCSV()`.
-
-**Something broken?** — Go to Settings → System and run **STATUS** (to check what's wrong) or **REPAIR** (to fix it). These are safe to run any time.
+### Step 3: Run Setup / Repair
+1. In the toolbar dropdown, select the function `SETUP` or `runRepair` and click **Run**.
+2. This will securely verify your sheets and create three new configuration tabs in your Config sheet without modifying existing tabs:
+   - `KeywordMap` (for auto-categorizing based on keywords)
+   - `EmailSources` (for defining Gmail scan rules)
+   - `Logs` (for chat and receipt import logs)
+3. Redeploy your web app: Click **Deploy** → **Manage deployments** → click the edit pencil icon → select version **New Version** → click **Deploy**.
+4. Refresh your web app. Go to Settings to view the new **Email Receipt Ingestion** and **Keyword Mappings** sections.
 
 ---
 
-## Why Google Sheets?
+## Fresh Self-Hosting (Setup Guide)
 
-- **It's free** — no hosting costs, no subscriptions
-- **You own your data** — it's in your Google Drive, readable as a normal spreadsheet
-- **It's private** — no third party sees your financial data
-- **Built-in backups** — Google Sheets tracks version history automatically
+You need a Google account. That's it.
+
+### Step 1: Create a New Script Project
+1. Go to [script.google.com](https://script.google.com) and click **New Project**.
+2. Click the gear icon (**Project Settings**) on the left sidebar and check **"Show 'appsscript.json' manifest file in editor"**.
+3. Go back to the editor.
+
+### Step 2: Add Files
+Create the following files in your Apps Script project and paste the contents from this repository:
+- **Manifest**: `appsscript.json`
+- **Script Files**: `Code.gs`, `AdminOps.gs`, `ChatHandler.gs`, `EmailIngestion.gs`
+- **Shared HTML Files**: `index.html`, `shared-styles.html`, `shared-nav.html`
+- **Page HTML Files**: `page-add.html`, `page-dashboard.html`, `page-expenses.html`, `page-analytics.html`, `page-income.html`, `page-standing.html`, `page-settings.html`
+
+> *Note: In Apps Script, click **+** next to Files → select **HTML** or **Script** as appropriate. Type the name without extensions.*
+
+### Step 3: Run SETUP
+1. In the editor toolbar dropdown, select the function **SETUP** and click **Run**.
+2. Authorize the script when prompted (click **Review permissions** → choose your account → **Advanced** → **Go to Spendwise (unsafe)** → **Allow**).
+3. The script will create your database sheets automatically in Google Drive. Check the execution logs for success.
+
+### Step 4: Deploy Web App
+1. Click **Deploy** → **New Deployment**.
+2. Select type: **Web App** (click gear icon next to "Select type" if Web App is not listed).
+3. Set configuration:
+   - Execute as: **Me**
+   - Who has access: **Only myself** (Recommended for privacy).
+4. Click **Deploy** and copy the **Web App URL**. Open it to access Spendwise!
+
+---
+
+## Configuring Email Receipt Ingestion
+
+Gmail ingestion allows Spendwise to scan your inbox, parse receipt details, and automatically log expenses.
+
+### 1. Configure Keyword Mappings
+Go to Settings → **Keyword Mappings** to link keywords in transaction descriptions to categories. For example:
+- `swiggy` → `Food & Drink`
+- `zomato` → `Food & Drink`
+- `amazon` → `Shopping`
+- `uber` → `Transport`
+
+### 2. Configure Email Sources
+Go to Settings → **Email Receipt Ingestion** → click **+ Add Source** and configure:
+- **Sender**: Email address of the vendor (e.g. `noreply@swiggy.in`).
+- **Subject Filter**: Substring or text that matches the receipt email (e.g. `Order confirmation`, `Your Amazon.in order`).
+- **Parser**: Select a specialized parser (`Swiggy`, `Zomato`, `Amazon`) or select `Generic Keyword Categorizer` for other vendors.
+- **Enabled**: Check to activate the scanning rule.
+
+### 3. Save & Enable
+1. Enable the **Enable Email Ingestion** toggle switch.
+2. Select your desired **Scan Interval** (e.g. every 15 min, 30 min, or every 60 min).
+3. Click **Save Email Settings**. This automatically registers a background time-based trigger in your Apps Script account.
+4. Click **Run Import Now** to test the scan immediately.
+5. Click **View Logs** to verify that emails were processed and see if any transactions were imported or skipped as duplicates.
+
+---
+
+## Configuring Google Chat App
+
+Link Spendwise to Google Chat to add expenses on-the-go or get daily budget progress summaries.
+
+### 1. Link to a Google Cloud Project (GCP)
+1. Open your Apps Script project editor.
+2. Click Project Settings (gear icon) and copy your **Project Number** under GCP Project (if using a default project, you will need to link it to a standard GCP Project by clicking **Change project** and entering a GCP project ID).
+3. Open the [Google Cloud Console](https://console.cloud.google.com/) for that project.
+
+### 2. Enable Google Chat API
+1. In Cloud Console, search for **Google Chat API** and click **Enable**.
+2. Go to the **Configuration** tab of the Google Chat API.
+
+### 3. Configure Chat Settings
+Fill in the configuration fields:
+- **App name**: Spendwise
+- **Avatar URL**: (Use any image URL, e.g. a green wallet icon)
+- **Description**: Spendwise Expense Tracker Bot
+- **Interactive features**: Enable/Turn ON
+- **Functionality**: Check **Receive 1:1 messages** (so you can DM the bot) and optionally **Join spaces**
+- **Connection settings**: Select **Apps Script project** and paste your Apps Script **Deployment ID** (retrieve this from Apps Script editor: Deploy → Manage deployments → copy the Active Deployment ID).
+- **Slash commands**: Add the following commands:
+  - `/spend` (Description: `Log an expense. Format: /spend <amount> <desc> [category]`)
+  - `/summary` (Description: `Get budget summary`)
+  - `/help` (Description: `Show help guide`)
+- Click **Save**.
+
+### 4. Chat Commands
+Open Google Chat, search for **Spendwise**, and start a conversation. Try these commands:
+- `/spend 120 Uber ride to work` — Automatically logs `120` currency units, categorizes under `Transport` (using keyword mappings), and saves notes with a Chat reference.
+- `/spend 500 grocery shopping Groceries` — Logs `500` under the `Groceries` category explicitly.
+- `/summary` — Shows your total monthly spend, budget usage per category, and remaining balance.
+- `/help` — Lists all commands.
+
+### 5. Daily Chat Summary (Opt-in)
+Go to your Settings sheet (or set `dailySummaryEnabled` to `true` and configure `dailySummaryTime` in the settings) and run `installDailySummaryTrigger()` from the script editor. This will push your budget summary directly to you in Google Chat every evening.
 
 ---
 
 ## Good to know
 
-- Designed for **one person** (single Google account)
-- Needs an **internet connection** — no offline mode
-- If you have the app open in two tabs, changes in one won't auto-show in the other — just refresh
-- Google Apps Script has daily limits (6 min execution, 100 emails) but personal use never hits them
+- **Safe Upgrades**: The SETUP and REPAIR scripts detect if your configuration is already present and will never overwrite, clear, or modify your existing transaction data.
+- **Privacy First**: All Gmail scanning and Google Chat communication run entirely within your Google account. No external servers or database queries are performed.
+- **Google Limits**: Apps Script triggers run on Google's free tier. Mail scanning checks read-only metadata and skips processing for messages already seen, ensuring you stay well within daily quota limits.
 
 ---
 

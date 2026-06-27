@@ -1,10 +1,12 @@
 // ============================================================
-// SPENDWISE — Code.gs  v1.1.0
+// SPENDWISE — Code.gs  v1.2.0
 // Runtime backend only. All setup/admin logic lives in AdminOps.gs.
 //
 // FILE MAP:
 //   Code.gs             — this file: all server-side functions
 //   AdminOps.gs         — SETUP, REPAIR, STATUS + import/diagnostic tools
+//   ChatHandler.gs      — Google Chat App: /spend, /summary, daily summary
+//   EmailIngestion.gs   — Gmail receipt import pipeline + parsers
 //   index.html          — SPA shell, router, nav, FAB
 //   shared-styles.html  — all CSS
 //   shared-nav.html     — overlay nav, toast, edit modal, shared JS utilities
@@ -20,7 +22,7 @@
 // Script Properties. No IDs are hardcoded anywhere in this file.
 // ============================================================
 
-const SPENDWISE_VERSION = '1.1.0';
+const SPENDWISE_VERSION = '1.2.0';
 
 const SHEET_NAME = 'Expenses';
 const CATEGORIES_TAB = 'Categories';
@@ -28,6 +30,9 @@ const SHARD_REGISTRY = 'ShardRegistry';
 const SETTINGS_TAB = 'Settings';
 const INCOME_TAB = 'Income';     // stored in Config sheet; not sharded
 const SI_TAB = 'StandingInstructions'; // stored in Config sheet; not sharded
+const KEYWORD_MAP_TAB = 'KeywordMap';       // keyword → category mapping
+const EMAIL_SOURCES_TAB = 'EmailSources';   // email sender/subject rules
+const LOGS_TAB = 'Logs';                   // import/chat audit trail
 
 const TTL_CATEGORIES = 3600;
 const TTL_ANALYTICS = 300;
@@ -35,6 +40,7 @@ const TTL_SHARD_REG = 7200;
 const TTL_EXPENSES = 300;
 const TTL_SETTINGS = 3600;
 const TTL_SI = 3600; // standing instructions — changes infrequently
+const TTL_KEYWORD_MAP = 3600; // keyword mappings — changes infrequently
 
 const SCRIPT_CACHE = CacheService.getScriptCache();
 
@@ -64,6 +70,15 @@ const DEFAULT_SETTINGS = {
   weeklyReportDay: 'Monday',
   weeklyReportTime: '8',
   weeklyReportEmail: '',
+  // Chat integration (opt-in)
+  chatEnabled: 'false',
+  chatSpaceId: '',
+  // Daily summary (opt-in)
+  dailySummaryEnabled: 'false',
+  dailySummaryTime: '21',
+  // Email ingestion (opt-in)
+  emailIngestionEnabled: 'false',
+  emailIngestionIntervalMinutes: '15',
 };
 
 const _ssCache = {};
@@ -99,6 +114,12 @@ function getActiveShardSS() { return _openSS(getActiveShardId()); }
 
 // ── SPA entry point ──────────────────────────────────────────
 function doGet(e) {
+  const activeEmail = Session.getActiveUser().getEmail();
+  const ownerEmail = Session.getEffectiveUser().getEmail();
+  if (!activeEmail || activeEmail !== ownerEmail) {
+    return HtmlService.createHtmlOutput('<h1>🔒 Unauthorized</h1><p>You do not have permission to access this application.</p>');
+  }
+
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'add';
   const validPages = ['add', 'dashboard', 'expenses', 'analytics', 'settings', 'income', 'standing'];
   const tmpl = HtmlService.createTemplateFromFile('index');
@@ -108,6 +129,39 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
     .setFaviconUrl('https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/refs/heads/main/screenshots/svgviewer-png-output.png');
+}
+
+// ── Webhook / HTTP endpoint entry point for Google Chat ──────
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ text: 'Error: No payload' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    const event = JSON.parse(e.postData.contents);
+    
+    // Security check: Only allow the owner of the script to interact with the bot
+    const ownerEmail = Session.getEffectiveUser().getEmail();
+    const callerEmail = event.user && event.user.email;
+    if (!callerEmail || callerEmail !== ownerEmail) {
+      return ContentService.createTextOutput(JSON.stringify({ text: '🔒 Unauthorized: This bot is private to its owner.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    let response;
+    if (event.type === 'APP_COMMAND') {
+      response = onAppCommand(event);
+    } else {
+      response = onMessage(event);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify(response || {}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log('doPost error: ' + err.message);
+    return ContentService.createTextOutput(JSON.stringify({ text: '❌ Error: ' + err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function include(filename) {
@@ -151,6 +205,15 @@ function _initConfigSheet(firstShardId) {
     Object.entries(DEFAULT_SETTINGS).forEach(([k, v], i) => sheet.getRange(i + 2, 1, 1, 2).setValues([[k, v]]));
     sheet.getRange(1, 1, 1, 2).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
     sheet.setFrozenRows(1);
+  } else {
+    const sheet = ss.getSheetByName(SETTINGS_TAB);
+    if (sheet.getLastRow() > 1) {
+      const existingKeys = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().map(r => String(r[0]));
+      const missingEntries = Object.entries(DEFAULT_SETTINGS).filter(([k, v]) => !existingKeys.includes(k));
+      if (missingEntries.length > 0) {
+        sheet.getRange(sheet.getLastRow() + 1, 1, missingEntries.length, 2).setValues(missingEntries);
+      }
+    }
   }
   if (!ss.getSheetByName(INCOME_TAB)) {
     const sheet = ss.insertSheet(INCOME_TAB);
@@ -163,6 +226,48 @@ function _initConfigSheet(firstShardId) {
     const sheet = ss.insertSheet(SI_TAB);
     const headers = ['ID', 'Name', 'Category', 'Amount', 'Frequency', 'DayOfMonth', 'DayOfWeek',
       'StartDate', 'EndDate', 'PaymentMethod', 'Notes', 'AutoLog', 'IsActive', 'LastLoggedDate'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  // ── KeywordMap tab ───────────────────────────────────────────
+  if (!ss.getSheetByName(KEYWORD_MAP_TAB)) {
+    const sheet = ss.insertSheet(KEYWORD_MAP_TAB);
+    const headers = ['Keyword', 'Category'];
+    const defaultMappings = [
+      ['lunch', 'Food & Drink'], ['dinner', 'Food & Drink'], ['breakfast', 'Food & Drink'],
+      ['tea', 'Food & Drink'], ['coffee', 'Food & Drink'], ['snack', 'Food & Drink'],
+      ['uber', 'Transport'], ['ola', 'Transport'], ['fuel', 'Transport'],
+      ['metro', 'Transport'], ['auto', 'Transport'],
+      ['grocery', 'Groceries'], ['dmart', 'Groceries'], ['bigbasket', 'Groceries'],
+      ['movie', 'Entertainment'], ['netflix', 'Subscriptions'], ['spotify', 'Subscriptions'],
+      ['rent', 'Rent'], ['electricity', 'Bills'], ['wifi', 'Bills'], ['mobile', 'Bills'],
+      ['medicine', 'Health & Wellbeing'], ['doctor', 'Health & Wellbeing'],
+      ['gym', 'Health & Wellbeing'], ['amazon', 'Shopping'], ['flipkart', 'Shopping'],
+    ];
+    const rows = [headers, ...defaultMappings];
+    sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+    sheet.getRange(1, 1, 1, 2).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  // ── EmailSources tab ────────────────────────────────────────
+  if (!ss.getSheetByName(EMAIL_SOURCES_TAB)) {
+    const sheet = ss.insertSheet(EMAIL_SOURCES_TAB);
+    const headers = ['Sender', 'SubjectPattern', 'ParserType', 'Enabled'];
+    const exampleRows = [
+      ['noreply@swiggy.in', 'Order Delivered', 'swiggy', true],
+      ['noreply@zomato.com', 'Order Summary', 'zomato', true],
+      ['auto-confirm@amazon.in', 'Your order', 'amazon', true],
+    ];
+    const rows = [headers, ...exampleRows];
+    sheet.getRange(1, 1, rows.length, 4).setValues(rows);
+    sheet.getRange(1, 1, 1, 4).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  // ── Logs tab ────────────────────────────────────────────────
+  if (!ss.getSheetByName(LOGS_TAB)) {
+    const sheet = ss.insertSheet(LOGS_TAB);
+    const headers = ['Timestamp', 'Module', 'Status', 'Message', 'ExternalId'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
     sheet.setFrozenRows(1);
@@ -1608,13 +1713,368 @@ function sendTestReport() {
   return sendWeeklyReport(email);
 }
 
+// ============================================================
+// KEYWORD-BASED CATEGORIZATION ENGINE
+// Sheet-driven: reads KeywordMap tab from Config sheet.
+// No hardcoded keyword→category mappings.
+// ============================================================
+
+function _getKeywordMapSheet() {
+  const ss = getConfigSS();
+  let sheet = ss.getSheetByName(KEYWORD_MAP_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(KEYWORD_MAP_TAB);
+    sheet.getRange(1, 1, 1, 2).setValues([['Keyword', 'Category']]);
+    sheet.getRange(1, 1, 1, 2).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Returns { keyword: category } map (lowercased keys). Cached.
+function _getKeywordMap() {
+  const cached = SCRIPT_CACHE.get('keyword_map');
+  if (cached) { try { return JSON.parse(cached); } catch (e) { } }
+  try {
+    const sheet = _getKeywordMapSheet();
+    if (sheet.getLastRow() <= 1) return {};
+    const map = {};
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues()
+      .filter(r => r[0])
+      .forEach(r => { map[String(r[0]).toLowerCase().trim()] = String(r[1] || 'Other'); });
+    SCRIPT_CACHE.put('keyword_map', JSON.stringify(map), TTL_KEYWORD_MAP);
+    return map;
+  } catch (e) { Logger.log('_getKeywordMap error: ' + e.message); return {}; }
+}
+
+// Looks up keyword in the map. Case-insensitive, supports partial match.
+// Returns category name or 'Other'.
+function categorizeByKeyword(keyword) {
+  if (!keyword) return 'Other';
+  const map = _getKeywordMap();
+  const key = String(keyword).toLowerCase().trim();
+  // Exact match first
+  if (map[key]) return map[key];
+  // Partial match: check if keyword contains or is contained by a map key
+  for (const mapKey of Object.keys(map)) {
+    if (key.includes(mapKey) || mapKey.includes(key)) return map[mapKey];
+  }
+  return 'Other';
+}
+
+// Returns all keyword mappings as an array of { keyword, category } objects.
+function getKeywordMappings() {
+  const map = _getKeywordMap();
+  return Object.entries(map).map(([keyword, category]) => ({ keyword, category }));
+}
+
+// Saves keyword mappings. Replaces all rows.
+function saveKeywordMappings(mappings) {
+  try {
+    const sheet = _getKeywordMapSheet();
+    if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+    if (mappings && mappings.length > 0) {
+      sheet.getRange(2, 1, mappings.length, 2).setValues(
+        mappings.map(m => [String(m.keyword || '').toLowerCase().trim(), m.category || 'Other'])
+      );
+    }
+    SCRIPT_CACHE.remove('keyword_map');
+    return { success: true, message: 'Keyword mappings saved.' };
+  } catch (e) {
+    Logger.log('saveKeywordMappings error: ' + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+// ============================================================
+// HISTORY-BASED CATEGORIZATION (auto keyword learning)
+// Learns category↔description associations from past expenses so
+// new descriptions are auto-categorized even without a KeywordMap row.
+// ============================================================
+
+const _STOPWORDS = {
+  the: 1, and: 1, for: 1, with: 1, from: 1, paid: 1, payment: 1, pay: 1,
+  expense: 1, bought: 1, buy: 1, order: 1, bill: 1, rs: 1, inr: 1, via: 1, upi: 1
+};
+
+// Splits a description into meaningful lowercase tokens (>=3 chars,
+// no stopwords, no pure numbers).
+function _tokenizeDesc(s) {
+  return String(s || '').toLowerCase().split(/[^a-z0-9]+/)
+    .filter(t => t.length >= 3 && !_STOPWORDS[t] && !/^\d+$/.test(t));
+}
+
+// Returns the highest-count key in a { key: count } object, or null.
+function _topVote(votes) {
+  let best = null, bestN = 0;
+  for (const k in votes) { if (votes[k] > bestN) { bestN = votes[k]; best = k; } }
+  return best;
+}
+
+// Builds (and caches) an index from all historical expenses:
+//   { full: { "<description>": {cat: n} }, tokens: { "<token>": {cat: n} } }
+// Expenses categorized as 'Other' are ignored so they don't pollute votes.
+function _getHistoryCategoryIndex() {
+  const cached = SCRIPT_CACHE.get('hist_cat_index');
+  if (cached) { try { return JSON.parse(cached); } catch (e) { } }
+  const full = {}, tokens = {};
+  try {
+    const shardIds = _getAllShardRecords().map(s => s.id);
+    if (!shardIds.includes(getActiveShardId())) shardIds.push(getActiveShardId());
+    [...new Set(shardIds)].forEach(id => {
+      let exps = [];
+      try { exps = _readShardExpenses(id); } catch (e) { }
+      exps.forEach(e => {
+        const cat = String(e.category || '').trim();
+        const desc = String(e.description || '').toLowerCase().trim();
+        if (!cat || cat === 'Other' || !desc) return;
+        full[desc] = full[desc] || {};
+        full[desc][cat] = (full[desc][cat] || 0) + 1;
+        _tokenizeDesc(desc).forEach(tok => {
+          tokens[tok] = tokens[tok] || {};
+          tokens[tok][cat] = (tokens[tok][cat] || 0) + 1;
+        });
+      });
+    });
+  } catch (e) { Logger.log('_getHistoryCategoryIndex error: ' + e.message); }
+  const index = { full, tokens };
+  try { SCRIPT_CACHE.put('hist_cat_index', JSON.stringify(index), 1800); } catch (e) { }
+  return index;
+}
+
+// Categorizes a description by matching it against expense history.
+// Exact full-description match wins; otherwise tokens vote. Returns a
+// category name, or null when history offers no match.
+function categorizeByHistory(description) {
+  if (!description) return null;
+  const index = _getHistoryCategoryIndex();
+  const desc = String(description).toLowerCase().trim();
+  if (index.full[desc]) return _topVote(index.full[desc]);
+  const votes = {};
+  _tokenizeDesc(desc).forEach(tok => {
+    const m = index.tokens[tok];
+    if (m) for (const cat in m) votes[cat] = (votes[cat] || 0) + m[cat];
+  });
+  return _topVote(votes);
+}
+
+// Appends a learned keyword→category row to the KeywordMap sheet so it
+// becomes visible and editable in the Settings UI. No-ops if a row for
+// this keyword already exists, or for empty/'Other' values.
+function _learnKeyword(keyword, category) {
+  try {
+    const key = String(keyword || '').toLowerCase().trim();
+    if (!key || !category || category === 'Other') return;
+    if (_getKeywordMap()[key]) return; // already mapped exactly
+    _getKeywordMapSheet().appendRow([key, category]);
+    SCRIPT_CACHE.remove('keyword_map');
+    logEvent('CATEGORIZE', 'LEARNED', key + ' → ' + category, '');
+  } catch (e) { Logger.log('_learnKeyword error: ' + e.message); }
+}
+
+// ── One-time backfill ────────────────────────────────────────
+// Run manually from the editor to seed the KeywordMap from ALL existing
+// history in one pass (instead of learning incrementally per expense).
+// For every distinct word in past descriptions, assigns the category it
+// was used with most often — keeping only confident, unambiguous words.
+//   minCount       min times a word must appear      (default 2)
+//   minConfidence  min share for the winning category (default 0.6)
+// Existing KeywordMap rows are never overwritten. Returns a report.
+// Tip: backfillKeywordMap(1) is aggressive and also captures one-offs.
+function backfillKeywordMap(minCount, minConfidence) {
+  minCount = minCount || 2;
+  minConfidence = minConfidence || 0.6;
+
+  SCRIPT_CACHE.remove('hist_cat_index'); // force a fresh scan of history
+  const index = _getHistoryCategoryIndex();
+  const existing = _getKeywordMap();
+
+  const toAdd = [];
+  Object.keys(index.tokens).forEach(tok => {
+    if (existing[tok]) return; // don't overwrite a manual/learned rule
+    const votes = index.tokens[tok];
+    let total = 0, top = null, topN = 0;
+    for (const cat in votes) {
+      total += votes[cat];
+      if (votes[cat] > topN) { topN = votes[cat]; top = cat; }
+    }
+    if (total < minCount) return;
+    if ((topN / total) < minConfidence) return;
+    toAdd.push([tok, top]);
+  });
+
+  if (toAdd.length) {
+    const sheet = _getKeywordMapSheet();
+    sheet.getRange(sheet.getLastRow() + 1, 1, toAdd.length, 2).setValues(toAdd);
+    SCRIPT_CACHE.remove('keyword_map');
+    logEvent('CATEGORIZE', 'BACKFILL', 'Added ' + toAdd.length + ' keywords', '');
+  }
+
+  const report = 'Backfill complete — added ' + toAdd.length + ' keyword(s) ' +
+    '(minCount=' + minCount + ', minConfidence=' + minConfidence + '). ' +
+    'Existing rows and low-confidence words were skipped.';
+  Logger.log(report);
+  toAdd.forEach(([k, c]) => Logger.log('  + ' + k + ' → ' + c));
+  return { added: toAdd.length, keywords: toAdd.map(([k, c]) => ({ keyword: k, category: c })), message: report };
+}
+
+// Best-effort categorization: explicit KeywordMap → learned history → 'Other'.
+// When history resolves a category, the mapping is persisted to KeywordMap.
+function smartCategorize(description) {
+  if (!description) return 'Other';
+  const mapped = categorizeByKeyword(description);
+  if (mapped && mapped !== 'Other') return mapped;
+  const learned = categorizeByHistory(description);
+  if (learned) {
+    _learnKeyword(description, learned);
+    return learned;
+  }
+  return 'Other';
+}
+
+// ============================================================
+// EMAIL SOURCES — CRUD for the EmailSources config tab
+// ============================================================
+
+function _getEmailSourcesSheet() {
+  const ss = getConfigSS();
+  let sheet = ss.getSheetByName(EMAIL_SOURCES_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(EMAIL_SOURCES_TAB);
+    sheet.getRange(1, 1, 1, 4).setValues([['Sender', 'SubjectPattern', 'ParserType', 'Enabled']]);
+    sheet.getRange(1, 1, 1, 4).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getEmailSources() {
+  try {
+    const sheet = _getEmailSourcesSheet();
+    if (sheet.getLastRow() <= 1) return [];
+    return sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues()
+      .filter(r => r[0])
+      .map(r => ({
+        sender: String(r[0] || ''),
+        subjectPattern: String(r[1] || ''),
+        parserType: String(r[2] || 'generic'),
+        enabled: r[3] === true || r[3] === 'TRUE' || r[3] === 'true'
+      }));
+  } catch (e) { Logger.log('getEmailSources error: ' + e.message); return []; }
+}
+
+function saveEmailSources(sources) {
+  try {
+    const sheet = _getEmailSourcesSheet();
+    if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+    if (sources && sources.length > 0) {
+      sheet.getRange(2, 1, sources.length, 4).setValues(
+        sources.map(s => [s.sender || '', s.subjectPattern || '', s.parserType || 'generic', s.enabled !== false])
+      );
+    }
+    return { success: true, message: 'Email sources saved.' };
+  } catch (e) {
+    Logger.log('saveEmailSources error: ' + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+// ============================================================
+// STRUCTURED LOGGING — writes to Logs tab in Config sheet
+// ============================================================
+
+function _getLogsSheet() {
+  const ss = getConfigSS();
+  let sheet = ss.getSheetByName(LOGS_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(LOGS_TAB);
+    sheet.getRange(1, 1, 1, 5).setValues([['Timestamp', 'Module', 'Status', 'Message', 'ExternalId']]);
+    sheet.getRange(1, 1, 1, 5).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Log an event. Module: 'EMAIL', 'CHAT', 'SUMMARY'. Status: 'SUCCESS', 'ERROR', 'SKIP', 'DUPLICATE'.
+function logEvent(module, status, message, externalId) {
+  try {
+    const sheet = _getLogsSheet();
+    sheet.appendRow([new Date(), module, status, message, externalId || '']);
+    // Trim logs to last 1000 rows to prevent unbounded growth
+    if (sheet.getLastRow() > 1001) {
+      sheet.deleteRows(2, sheet.getLastRow() - 1001);
+    }
+  } catch (e) { Logger.log('logEvent error: ' + e.message); }
+}
+
+// Returns recent log entries for the UI.
+function getRecentLogs(limit) {
+  try {
+    const sheet = _getLogsSheet();
+    const count = Math.max(0, sheet.getLastRow() - 1);
+    if (count === 0) return [];
+    const n = Math.min(limit || 50, count);
+    const startRow = sheet.getLastRow() - n + 1;
+    const tz = Session.getScriptTimeZone();
+    return sheet.getRange(startRow, 1, n, 5).getValues()
+      .filter(r => r[0])
+      .map(r => ({
+        timestamp: r[0] ? Utilities.formatDate(new Date(r[0]), tz, 'yyyy-MM-dd HH:mm') : '',
+        module: String(r[1] || ''),
+        status: String(r[2] || ''),
+        message: String(r[3] || ''),
+        externalId: String(r[4] || '')
+      }))
+      .reverse(); // newest first
+  } catch (e) { Logger.log('getRecentLogs error: ' + e.message); return []; }
+}
+
+// Check if an external ID already exists in any shard (for duplicate prevention).
+// Scans Notes field for [EXT:externalId] tag.
+function _isDuplicateExternal(externalId) {
+  if (!externalId) return false;
+  const tag = '[EXT:' + externalId + ']';
+  const shardIds = _getAllShardRecords().map(s => s.id);
+  const activeId = getActiveShardId();
+  if (!shardIds.includes(activeId)) shardIds.unshift(activeId);
+  for (const shardId of shardIds) {
+    try {
+      const sheet = _openSS(shardId).getSheetByName(SHEET_NAME);
+      if (!sheet || sheet.getLastRow() <= 1) continue;
+      // Notes column is column 7 (index 6 in 0-based)
+      const notes = sheet.getRange(2, 7, sheet.getLastRow() - 1, 1).getValues().flat();
+      if (notes.some(n => String(n).includes(tag))) return true;
+    } catch (e) { }
+  }
+  return false;
+}
+
+// Add an expense with source tagging. Used by Chat and Email handlers.
+// Encodes source and externalId in the Notes field for backward compatibility.
+function addExpenseWithSource(expense, source, externalId) {
+  // Build notes with source tags
+  let notes = expense.notes || '';
+  if (source) notes += (notes ? ' · ' : '') + '[SOURCE:' + source + ']';
+  if (externalId) notes += ' [EXT:' + externalId + ']';
+
+  return addExpense({
+    date: expense.date,
+    category: expense.category,
+    description: expense.description,
+    amount: expense.amount,
+    paymentMethod: expense.paymentMethod || 'Auto',
+    notes: notes
+  });
+}
+
+
 // ── Cache ────────────────────────────────────────────────────
 // Called after any expense or category write.
 // Income cache is managed separately by _invalidateIncomeCache().
 function invalidateCache() {
   SCRIPT_CACHE.removeAll([
     'categories', 'shard_registry', 'settings', 'si_all',
-    'income_{}',
+    'income_{}', 'keyword_map', 'hist_cat_index',
     'analytics_week', 'analytics_month', 'analytics_current_month',
     'analytics_quarter', 'analytics_half', 'analytics_current_year', 'analytics_year',
     'monthly_comparison_quarter', 'monthly_comparison_half',
@@ -1672,7 +2132,8 @@ function getSystemStatus() {
       const ss = SpreadsheetApp.openById(configId);
       const tabs = ss.getSheets().map(s => s.getName());
       lines.push({ type: 'ok', text: 'Accessible: ' + ss.getName() });
-      ['Categories', 'ShardRegistry', 'Settings', 'Income', 'StandingInstructions'].forEach(t => {
+      ['Categories', 'ShardRegistry', 'Settings', 'Income', 'StandingInstructions',
+       'KeywordMap', 'EmailSources', 'Logs'].forEach(t => {
         const ok = tabs.includes(t);
         if (!ok) allOk = false;
         lines.push({ type: ok ? 'ok' : 'error', text: t + ' tab: ' + (ok ? 'present' : 'MISSING') });
@@ -1727,6 +2188,38 @@ function getSystemStatus() {
     });
   } else {
     lines.push({ type: 'info', text: 'Weekly email report: not enabled' });
+  }
+
+  // Email ingestion
+  const hasEmailIngestion = triggers.some(t => t.getHandlerFunction() === 'processEmailReceipts');
+  if (rptSettings.emailIngestionEnabled === 'true') {
+    lines.push({
+      type: hasEmailIngestion ? 'ok' : 'warn',
+      text: 'Email ingestion: ' + (hasEmailIngestion ? 'active' : 'ENABLED but no trigger — run REPAIR')
+    });
+  } else {
+    lines.push({ type: 'info', text: 'Email ingestion: not enabled' });
+  }
+
+  // Daily summary
+  const hasDailySummary = triggers.some(t => t.getHandlerFunction() === 'sendDailySummary');
+  if (rptSettings.dailySummaryEnabled === 'true') {
+    lines.push({
+      type: hasDailySummary ? 'ok' : 'warn',
+      text: 'Daily Chat summary: ' + (hasDailySummary ? 'active (' + (rptSettings.dailySummaryTime || '21') + ':00)' : 'ENABLED but no trigger — run REPAIR')
+    });
+  } else {
+    lines.push({ type: 'info', text: 'Daily Chat summary: not enabled' });
+  }
+
+  // Chat integration
+  if (rptSettings.chatEnabled === 'true') {
+    lines.push({
+      type: 'ok',
+      text: 'Chat integration: enabled' + (rptSettings.chatSpaceId ? ' (space linked)' : ' (no space — message the bot)')
+    });
+  } else {
+    lines.push({ type: 'info', text: 'Chat integration: not enabled' });
   }
 
   // Cache warmth

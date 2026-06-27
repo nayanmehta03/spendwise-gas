@@ -1,10 +1,34 @@
 {
   "timeZone": "Asia/Kolkata",
-  "dependencies": {},
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Chat",
+        "version": "v1",
+        "serviceId": "chat"
+      }
+    ]
+  },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "webapp": {
     "executeAs": "USER_DEPLOYING",
     "access": "MYSELF"
-  }
+  },
+  "addOns": {
+    "common": {
+      "name": "Spendwise",
+      "logoUrl": "https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/refs/heads/main/screenshots/svgviewer-png-output.png"
+    },
+    "chat": {}
+  },
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/chat.messages.create",
+    "https://www.googleapis.com/auth/script.external_request",
+    "https://www.googleapis.com/auth/script.scriptapp",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://mail.google.com/"
+  ]
 }

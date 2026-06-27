@@ -134,6 +134,91 @@
     </div>
   </div>
 
+  <!-- EMAIL INGESTION -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Email Receipt Ingestion</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div class="card" style="padding:0;">
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Enable Email Ingestion</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setEmailEnabled" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+        <div id="emailOptions">
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Scan Interval</span>
+            <select id="setEmailInterval" class="form-input sm" style="width:auto;">
+              <option value="15">Every 15 min</option>
+              <option value="30">Every 30 min</option>
+              <option value="60">Every 60 min</option>
+            </select>
+          </div>
+          <div class="settings-row" style="padding:10px 16px;background:var(--bg2);border-radius:0 0 var(--radius-sm) var(--radius-sm);">
+            <p style="font-size:12px;color:var(--text3);margin:0;">Scans Gmail for receipts from configured senders and auto-imports transactions.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email Sources Table -->
+      <div style="margin-top:12px;">
+        <p style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Email Sources</p>
+        <div id="emailSourcesList" class="email-sources-list">
+          <div class="skeleton" style="height:48px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn-outline btn-sm" id="addEmailSourceBtn">+ Add Source</button>
+          <button class="btn-primary btn-sm" id="saveEmailSourcesBtn">Save Sources</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-primary btn-sm" id="saveEmailSettingsBtn">Save Email Settings</button>
+        <button class="btn-outline btn-sm" id="runEmailImportBtn">Run Import Now</button>
+        <button class="btn-outline btn-sm" id="viewLogsBtn">View Logs</button>
+      </div>
+
+      <!-- Logs panel -->
+      <div id="emailLogsPanel" class="hidden" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;">Import Logs</span>
+          <button class="btn-outline btn-sm" id="closeLogsBtn">Close</button>
+        </div>
+        <div id="emailLogsList"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:'Courier New',monospace;font-size:11px;line-height:1.8;max-height:280px;overflow-y:auto;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEYWORD MAPPINGS -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Keyword Mappings</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <p style="font-size:12px;color:var(--text3);margin-bottom:10px;">Map keywords to categories for Chat and Email auto-categorization. Used by <code>/spend</code> command and email import.</p>
+      <div id="keywordMapList" class="keyword-map-list">
+        <div class="skeleton" style="height:48px;border-radius:var(--radius-sm);margin-bottom:6px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn-outline btn-sm" id="addKeywordBtn">+ Add Mapping</button>
+        <button class="btn-primary btn-sm" id="saveKeywordsBtn">Save Mappings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- DATA & SHARDS -->
   <div class="settings-section">
     <div class="settings-section-title collapsible" data-toggle>
@@ -397,6 +482,8 @@
     _settingsInitialized = true;
     _wireCollapsibles();
     _wireAllListeners();
+    _wireEmailListeners();
+    _wireKeywordListeners();
     _loadSettings();
     _sysCheckSetupState();
   }
@@ -582,6 +669,9 @@
         _renderGeneralSettings(data.settings || {});
         _renderReportSettings(data.settings || {});
         _renderShardInfo(data.shardInfo || {});
+        _renderEmailSettings(data.settings || {});
+        _loadEmailSources();
+        _loadKeywordMappings();
       })
       .withFailureHandler(function () { showToast('Failed to load settings', 'error'); })
       .getSettingsPageData();
@@ -824,6 +914,233 @@
       .runRepair();
   }
 
+  // ── Email Ingestion Settings ─────────────────────────────────
+
+  function _wireEmailListeners() {
+    document.getElementById('setEmailEnabled').addEventListener('change', function () {
+      document.getElementById('emailOptions').style.opacity = this.checked ? '1' : '0.4';
+    });
+
+    document.getElementById('saveEmailSettingsBtn').addEventListener('click', function () {
+      var settings = {
+        emailIngestionEnabled: document.getElementById('setEmailEnabled').checked ? 'true' : 'false',
+        emailIngestionIntervalMinutes: document.getElementById('setEmailInterval').value
+      };
+      var btn = this; btn.disabled = true; btn.textContent = 'Saving...';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Save Email Settings';
+          showToast(r.success ? 'Email settings saved!' : 'Save failed', r.success ? 'success' : 'error');
+        })
+        .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Save Email Settings'; showToast('Save failed', 'error'); })
+        .saveSettings(settings);
+    });
+
+    document.getElementById('addEmailSourceBtn').addEventListener('click', function () {
+      var list = document.getElementById('emailSourcesList');
+      var div = document.createElement('div');
+      div.className = 'email-source-row';
+      div.innerHTML = '<input class="form-input sm" type="text" data-field="sender" placeholder="sender@email.com" style="flex:2;" />' +
+        '<input class="form-input sm" type="text" data-field="subjectPattern" placeholder="Subject Pattern" style="flex:2;" />' +
+        '<select class="form-input sm" data-field="parserType" style="width:auto;">' +
+        '<option value="generic">generic</option><option value="swiggy">swiggy</option>' +
+        '<option value="zomato">zomato</option><option value="amazon">amazon</option></select>' +
+        '<label class="toggle-switch" style="margin:0 4px;"><input type="checkbox" data-field="enabled" checked />' +
+        '<span class="toggle-track" style="width:32px;height:18px;"><span class="toggle-thumb" style="width:14px;height:14px;"></span></span></label>' +
+        '<button class="cat-editor-del" title="Remove">✕</button>';
+      div.querySelector('.cat-editor-del').addEventListener('click', function () { this.closest('.email-source-row').remove(); });
+      list.appendChild(div);
+      div.querySelector('[data-field="sender"]').focus();
+    });
+
+    document.getElementById('saveEmailSourcesBtn').addEventListener('click', function () {
+      var sources = _getEmailSourceValues();
+      var btn = this; btn.disabled = true; btn.textContent = 'Saving...';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Save Sources';
+          showToast(r.success ? 'Email sources saved!' : 'Save failed', r.success ? 'success' : 'error');
+        })
+        .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Save Sources'; showToast('Save failed', 'error'); })
+        .saveEmailSources(sources);
+    });
+
+    document.getElementById('runEmailImportBtn').addEventListener('click', function () {
+      var btn = this; btn.disabled = true; btn.textContent = 'Importing...';
+      showToast('Running email import...', 'info');
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Run Import Now';
+          if (r.skipped) {
+            showToast('Email ingestion is disabled or no sources configured', 'info');
+          } else if (r.success) {
+            showToast('Import done: ' + r.imported + ' imported, ' + r.skipped + ' skipped', 'success');
+          } else {
+            showToast('Import failed: ' + (r.message || ''), 'error');
+          }
+        })
+        .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Run Import Now'; showToast('Import failed', 'error'); })
+        .runEmailImportNow();
+    });
+
+    document.getElementById('viewLogsBtn').addEventListener('click', function () {
+      var panel = document.getElementById('emailLogsPanel');
+      panel.classList.remove('hidden');
+      document.getElementById('emailLogsList').innerHTML = '<span style="color:var(--text3);">Loading...</span>';
+      google.script.run
+        .withSuccessHandler(function (logs) {
+          var html = '';
+          if (!logs || logs.length === 0) {
+            html = '<span style="color:var(--text3);">No logs yet.</span>';
+          } else {
+            logs.forEach(function (l) {
+              var color = l.status === 'SUCCESS' ? 'var(--accent2)' : l.status === 'ERROR' ? 'var(--danger)' :
+                l.status === 'DUPLICATE' ? 'var(--accent3)' : 'var(--text2)';
+              html += '<div><span style="color:var(--text3);">' + l.timestamp + '</span> ' +
+                '<span style="color:' + color + ';font-weight:600;">[' + l.module + ':' + l.status + ']</span> ' +
+                l.message + '</div>';
+            });
+          }
+          document.getElementById('emailLogsList').innerHTML = html;
+        })
+        .withFailureHandler(function () {
+          document.getElementById('emailLogsList').innerHTML = '<span style="color:var(--danger);">Failed to load logs.</span>';
+        })
+        .getRecentLogs(50);
+    });
+
+    document.getElementById('closeLogsBtn').addEventListener('click', function () {
+      document.getElementById('emailLogsPanel').classList.add('hidden');
+    });
+  }
+
+  function _renderEmailSettings(settings) {
+    var enabled = settings.emailIngestionEnabled === 'true';
+    document.getElementById('setEmailEnabled').checked = enabled;
+    document.getElementById('setEmailInterval').value = settings.emailIngestionIntervalMinutes || '15';
+    document.getElementById('emailOptions').style.opacity = enabled ? '1' : '0.4';
+  }
+
+  function _loadEmailSources() {
+    google.script.run
+      .withSuccessHandler(function (sources) { _renderEmailSources(sources || []); })
+      .withFailureHandler(function () { document.getElementById('emailSourcesList').innerHTML = '<p style="color:var(--danger);font-size:12px;">Failed to load.</p>'; })
+      .getEmailSources();
+  }
+
+  function _renderEmailSources(sources) {
+    var html = '';
+    for (var i = 0; i < sources.length; i++) {
+      var s = sources[i];
+      html += '<div class="email-source-row">' +
+        '<input class="form-input sm" type="text" data-field="sender" value="' + esc(s.sender) + '" placeholder="sender@email.com" style="flex:2;" />' +
+        '<input class="form-input sm" type="text" data-field="subjectPattern" value="' + esc(s.subjectPattern) + '" placeholder="Subject Pattern" style="flex:2;" />' +
+        '<select class="form-input sm" data-field="parserType" style="width:auto;">' +
+        '<option value="generic"' + (s.parserType === 'generic' ? ' selected' : '') + '>generic</option>' +
+        '<option value="swiggy"' + (s.parserType === 'swiggy' ? ' selected' : '') + '>swiggy</option>' +
+        '<option value="zomato"' + (s.parserType === 'zomato' ? ' selected' : '') + '>zomato</option>' +
+        '<option value="amazon"' + (s.parserType === 'amazon' ? ' selected' : '') + '>amazon</option></select>' +
+        '<label class="toggle-switch" style="margin:0 4px;"><input type="checkbox" data-field="enabled"' + (s.enabled ? ' checked' : '') + ' />' +
+        '<span class="toggle-track" style="width:32px;height:18px;"><span class="toggle-thumb" style="width:14px;height:14px;"></span></span></label>' +
+        '<button class="cat-editor-del" title="Remove">✕</button>' +
+        '</div>';
+    }
+    document.getElementById('emailSourcesList').innerHTML = html;
+    document.querySelectorAll('#emailSourcesList .cat-editor-del').forEach(function (btn) {
+      btn.addEventListener('click', function () { this.closest('.email-source-row').remove(); });
+    });
+  }
+
+  function _getEmailSourceValues() {
+    var rows = document.querySelectorAll('.email-source-row');
+    var sources = [];
+    rows.forEach(function (row) {
+      var sender = row.querySelector('[data-field="sender"]').value.trim();
+      if (sender) sources.push({
+        sender: sender,
+        subjectPattern: row.querySelector('[data-field="subjectPattern"]').value.trim(),
+        parserType: row.querySelector('[data-field="parserType"]').value,
+        enabled: row.querySelector('[data-field="enabled"]').checked
+      });
+    });
+    return sources;
+  }
+
+  // ── Keyword Mappings ──────────────────────────────────────────
+
+  function _wireKeywordListeners() {
+    document.getElementById('addKeywordBtn').addEventListener('click', function () {
+      var list = document.getElementById('keywordMapList');
+      var div = document.createElement('div');
+      div.className = 'keyword-map-row';
+      div.innerHTML = '<input class="form-input sm" type="text" data-field="keyword" placeholder="keyword" style="flex:1;" />' +
+        '<select class="form-input sm" data-field="category" style="flex:1;">' + _buildCategoryOptionsForKeywords() + '</select>' +
+        '<button class="cat-editor-del" title="Remove">✕</button>';
+      div.querySelector('.cat-editor-del').addEventListener('click', function () { this.closest('.keyword-map-row').remove(); });
+      list.appendChild(div);
+      div.querySelector('[data-field="keyword"]').focus();
+    });
+
+    document.getElementById('saveKeywordsBtn').addEventListener('click', function () {
+      var mappings = _getKeywordValues();
+      if (!mappings.length) return showToast('Add at least one mapping', 'error');
+      var btn = this; btn.disabled = true; btn.textContent = 'Saving...';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Save Mappings';
+          showToast(r.success ? 'Keyword mappings saved!' : 'Save failed', r.success ? 'success' : 'error');
+        })
+        .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Save Mappings'; showToast('Save failed', 'error'); })
+        .saveKeywordMappings(mappings);
+    });
+  }
+
+  function _loadKeywordMappings() {
+    google.script.run
+      .withSuccessHandler(function (mappings) { _renderKeywordMappings(mappings || []); })
+      .withFailureHandler(function () { document.getElementById('keywordMapList').innerHTML = '<p style="color:var(--danger);font-size:12px;">Failed to load.</p>'; })
+      .getKeywordMappings();
+  }
+
+  function _renderKeywordMappings(mappings) {
+    var html = '';
+    for (var i = 0; i < mappings.length; i++) {
+      var m = mappings[i];
+      html += '<div class="keyword-map-row">' +
+        '<input class="form-input sm" type="text" data-field="keyword" value="' + esc(m.keyword) + '" placeholder="keyword" style="flex:1;" />' +
+        '<select class="form-input sm" data-field="category" style="flex:1;">' + _buildCategoryOptionsForKeywords(m.category) + '</select>' +
+        '<button class="cat-editor-del" title="Remove">✕</button>' +
+        '</div>';
+    }
+    document.getElementById('keywordMapList').innerHTML = html;
+    document.querySelectorAll('#keywordMapList .cat-editor-del').forEach(function (btn) {
+      btn.addEventListener('click', function () { this.closest('.keyword-map-row').remove(); });
+    });
+  }
+
+  function _buildCategoryOptionsForKeywords(selected) {
+    var cats = (_settingsData && _settingsData.categories) ? _settingsData.categories : [];
+    var opts = '<option value="Other">Other</option>';
+    for (var i = 0; i < cats.length; i++) {
+      var sel = (selected && cats[i].name === selected) ? ' selected' : '';
+      opts += '<option value="' + esc(cats[i].name) + '"' + sel + '>' + esc(cats[i].name) + '</option>';
+    }
+    return opts;
+  }
+
+  function _getKeywordValues() {
+    var rows = document.querySelectorAll('.keyword-map-row');
+    var mappings = [];
+    rows.forEach(function (row) {
+      var keyword = row.querySelector('[data-field="keyword"]').value.trim();
+      if (keyword) mappings.push({
+        keyword: keyword,
+        category: row.querySelector('[data-field="category"]').value
+      });
+    });
+    return mappings;
+  }
+
   // ── Icon Picker ───────────────────────────────────────────────
   const _AVAILABLE_ICONS = [
     'fork-knife', 'shopping-cart', 'car', 'tote', 'heartbeat', 'film-strip',
@@ -865,6 +1182,31 @@
     _closeIconPicker();
   }
 </script>
+
+<style>
+  .email-source-row,
+  .keyword-map-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .email-source-row .form-input,
+  .keyword-map-row .form-input {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+
+  .email-source-row .cat-editor-del,
+  .keyword-map-row .cat-editor-del {
+    flex-shrink: 0;
+  }
+</style>
 
 <style>
   .cat-editor-icon-btn {

@@ -1,3 +1,5 @@
 .clasp.json
 docs/*
 .vscode/*
+redeploy.bat
+redeploy.txt

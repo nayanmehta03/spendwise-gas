@@ -298,6 +298,37 @@ function _handleSpendCommand(args, ctx) {
 
 
 // ── /summary — Today's spending ──────────────────────────────
+// Today's expenses across every shard that could hold them. Reading only the
+// active shard missed anything dated today that lives elsewhere (bulk imports,
+// a shard rotation that hasn't run yet).
+function _todaysExpenses(today) {
+  return getExpenses({ startDate: today, endDate: today });
+}
+
+// Amounts are shown to the rupee everywhere else in the app — plain
+// toLocaleString() was leaking values like "1,234.56" into Chat.
+function _chatAmount(currency, amt) {
+  return currency + parseFloat(amt || 0).toLocaleString('en-IN',
+    { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+// Aggregates today's spending once, for both /summary and the daily push.
+function _todaySummaryData(today) {
+  const todayExpenses = _todaysExpenses(today);
+  const byCategory = {};
+  let total = 0;
+  todayExpenses.forEach(e => {
+    byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+    total += e.amount;
+  });
+  return {
+    count: todayExpenses.length,
+    total,
+    sortedCats: Object.entries(byCategory).sort((a, b) => b[1] - a[1]),
+    topExpenses: todayExpenses.slice().sort((a, b) => b.amount - a.amount).slice(0, 5)
+  };
+}
+
 function _handleSummaryCommand() {
   try {
     const settings = getSettings();
@@ -305,32 +336,12 @@ function _handleSummaryCommand() {
     const tz = Session.getScriptTimeZone();
     const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
-    // Get today's expenses from active shard
-    const allExpenses = _readShardExpenses(getActiveShardId());
-    const todayExpenses = allExpenses.filter(e => e.date === today);
-
-    if (todayExpenses.length === 0) {
+    const data = _todaySummaryData(today);
+    if (data.count === 0) {
       return _chatTextResponse('📊 *No expenses recorded today.*\n\nUse `/spend <amount> <keyword>` to log one.');
     }
 
-    // Aggregate by category
-    const byCategory = {};
-    let total = 0;
-    todayExpenses.forEach(e => {
-      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
-      total += e.amount;
-    });
-
-    // Sort categories by amount descending
-    const sortedCats = Object.entries(byCategory)
-      .sort((a, b) => b[1] - a[1]);
-
-    // Top expenses
-    const topExpenses = todayExpenses
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-
-    return _buildSummaryCard(currency, total, sortedCats, topExpenses, today);
+    return _buildSummaryCard(currency, data.total, data.sortedCats, data.topExpenses, today);
   } catch (e) {
     Logger.log('_handleSummaryCommand error: ' + e.message);
     return _chatTextResponse('❌ Failed to generate summary: ' + e.message);
@@ -399,11 +410,11 @@ function _buildSpendCard(currency, amount, keyword, category, expenseId) {
 
 function _buildSummaryCard(currency, total, sortedCats, topExpenses, dateStr) {
   const catLines = sortedCats.map(([cat, amt]) =>
-    cat + '  ' + currency + parseFloat(amt).toLocaleString('en-IN')
+    cat + '  ' + _chatAmount(currency, amt)
   ).join('\n');
 
   const topLines = topExpenses.map(e =>
-    '• ' + e.description + '  ' + currency + parseFloat(e.amount).toLocaleString('en-IN')
+    '• ' + e.description + '  ' + _chatAmount(currency, e.amount)
   ).join('\n');
 
   return {
@@ -419,7 +430,7 @@ function _buildSummaryCard(currency, total, sortedCats, topExpenses, dateStr) {
             header: 'Total',
             widgets: [{
               decoratedText: {
-                text: '<b>' + currency + parseFloat(total).toLocaleString('en-IN') + '</b>',
+                text: '<b>' + _chatAmount(currency, total) + '</b>',
                 startIcon: { knownIcon: 'DOLLAR' }
               }
             }]
@@ -459,6 +470,11 @@ function sendDailySummary() {
       Logger.log('sendDailySummary: disabled in settings');
       return { skipped: true };
     }
+    // Turning off Chat integration used to leave this posting regardless
+    if (settings.chatEnabled !== 'true') {
+      Logger.log('sendDailySummary: Chat integration is disabled');
+      return { skipped: true, reason: 'chat disabled' };
+    }
 
     const spaceId = settings.chatSpaceId;
     if (!spaceId) {
@@ -471,47 +487,32 @@ function sendDailySummary() {
     const tz = Session.getScriptTimeZone();
     const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
-    // Get today's expenses
-    const allExpenses = _readShardExpenses(getActiveShardId());
-    const todayExpenses = allExpenses.filter(e => e.date === today);
-
-    // Aggregate by category
-    const byCategory = {};
-    let total = 0;
-    todayExpenses.forEach(e => {
-      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
-      total += e.amount;
-    });
-
-    const sortedCats = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-    const topExpenses = todayExpenses.sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const data = _todaySummaryData(today);
 
     // Build message text
     let text = '📊 *Today\'s Spending*\n\n';
 
-    if (todayExpenses.length === 0) {
+    if (data.count === 0) {
       text += 'No expenses recorded today. 🎉';
     } else {
-      sortedCats.forEach(([cat, amt]) => {
-        text += cat + '  ' + currency + parseFloat(amt).toLocaleString('en-IN') + '\n';
+      data.sortedCats.forEach(([cat, amt]) => {
+        text += cat + '  ' + _chatAmount(currency, amt) + '\n';
       });
-      text += '\n*Total  ' + currency + parseFloat(total).toLocaleString('en-IN') + '*\n';
+      text += '\n*Total  ' + _chatAmount(currency, data.total) + '*\n';
 
-      if (topExpenses.length > 0) {
-        text += '\n*Top Expenses:*\n';
-        topExpenses.forEach(e => {
-          text += '• ' + e.description + '  ' + currency + parseFloat(e.amount).toLocaleString('en-IN') + '\n';
-        });
-      }
+      text += '\n*Top Expenses:*\n';
+      data.topExpenses.forEach(e => {
+        text += '• ' + e.description + '  ' + _chatAmount(currency, e.amount) + '\n';
+      });
     }
 
     // Send via Chat API
     const message = { text: text };
     Chat.Spaces.Messages.create(message, spaceId);
 
-    logEvent('SUMMARY', 'SUCCESS', 'Daily summary sent. Total: ' + currency + total, '');
-    Logger.log('sendDailySummary: sent. Total: ' + currency + total);
-    return { success: true, total };
+    logEvent('SUMMARY', 'SUCCESS', 'Daily summary sent. Total: ' + _chatAmount(currency, data.total), '');
+    Logger.log('sendDailySummary: sent. Total: ' + _chatAmount(currency, data.total));
+    return { success: true, total: data.total };
   } catch (e) {
     Logger.log('sendDailySummary error: ' + e.message);
     logEvent('SUMMARY', 'ERROR', 'sendDailySummary: ' + e.message, '');

@@ -452,7 +452,7 @@
       </div>
       <span class="si-upcoming-amt">${fmt(si.amount)}</span>
       <span class="si-status ${si.status}">${statusLbl}</span>
-      ${showLog ? `<button class="si-log-btn" id="silog-${esc(si.id)}" onclick="_quickLog('${esc(si.id)}', this)">Log</button>` : ''}
+      ${showLog ? `<button class="si-log-btn" id="silog-${esc(si.id)}" onclick="_quickLog('${esc(si.id)}', '${esc(si.dueDate)}', this)">Log</button>` : ''}
     </div>`;
         }).join('');
 
@@ -726,13 +726,18 @@
             .toggleStandingInstruction(id, setActive);
     }
 
-    function _quickLog(id, btn) {
+    // dueDate identifies which occurrence is being settled — without it the
+    // same due date could be logged again by the trigger or an email reminder.
+    function _quickLog(id, dueDate, btn) {
         btn.disabled = true;
         btn.textContent = '…';
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
                     showToast('Logged!', 'success');
+                    _loadStanding();
+                } else if (r && r.alreadyLogged) {
+                    showToast(r.message, 'info');
                     _loadStanding();
                 } else {
                     btn.disabled = false;
@@ -745,7 +750,7 @@
                 btn.textContent = 'Log';
                 showToast('Log failed', 'error');
             })
-            .logStandingInstruction(id);
+            .logStandingInstruction(id, dueDate);
     }
 
     // ── Utilities ─────────────────────────────────────────────────

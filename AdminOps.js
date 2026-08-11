@@ -281,6 +281,17 @@ function STATUS() {
       }
     }
 
+    // Recurring reminder trigger
+    const hasReminder = triggers.some(t => t.getHandlerFunction() === 'recurringReminderTrigger');
+    const reminderSettings = getSettings();
+    if (reminderSettings.recurringReminderEnabled === 'true') {
+      log.push('  ' + (hasReminder ? '✓' : '⚠') + ' Recurring reminder: ' + (hasReminder
+        ? 'active (' + (reminderSettings.recurringReminderDaysBefore || '1') + 'd before, ' + (reminderSettings.recurringReminderTime || '9') + ':00)'
+        : 'ENABLED but no trigger — re-save reminder settings'));
+    } else {
+      log.push('  ○ Recurring reminder (not enabled)');
+    }
+
     // Email ingestion trigger
     const hasEmailIngestion = triggers.some(t => t.getHandlerFunction() === 'processEmailReceipts');
     const emailSettings = getSettings();
@@ -410,19 +421,13 @@ function RESET() {
     log.push('⚠ Email ingestion trigger check failed: ' + e.message);
   }
 
-  // Reinstall daily summary trigger if enabled but missing
+  // Bring the daily summary trigger in line with settings — this also corrects
+  // a trigger left behind at a stale hour, not just a missing one
   try {
-    const settings = getSettings();
-    if (settings.dailySummaryEnabled === 'true') {
-      const hasSummary = ScriptApp.getProjectTriggers()
-        .some(t => t.getHandlerFunction() === 'sendDailySummary');
-      if (!hasSummary) {
-        installDailySummaryTrigger();
-        log.push('✓ Daily summary trigger reinstalled');
-      } else {
-        log.push('✓ Daily summary trigger: present');
-      }
-    }
+    const r = reconcileDailySummaryTrigger();
+    if (!r.enabled) log.push('○ Daily summary: not enabled' + (r.removed ? ' (stale trigger removed)' : ''));
+    else if (r.reinstalled) log.push('✓ Daily summary trigger set to ' + r.hour + ':00');
+    else log.push('✓ Daily summary trigger: present (' + r.hour + ':00)');
   } catch (e) {
     log.push('⚠ Daily summary trigger check failed: ' + e.message);
   }
@@ -499,7 +504,8 @@ function installDailySummaryTrigger() {
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   const settings = getSettings();
-  const hour = parseInt(settings.dailySummaryTime) || 21;
+  const parsed = parseInt(settings.dailySummaryTime);
+  const hour = isNaN(parsed) ? 21 : parsed; // 0 is a valid hour — || would eat it
 
   ScriptApp.newTrigger('sendDailySummary')
     .timeBased()
@@ -507,6 +513,10 @@ function installDailySummaryTrigger() {
     .atHour(hour)
     .nearMinute(0)
     .create();
+
+  // A ClockTrigger can't be asked what hour it fires at, so record it —
+  // reconcileDailySummaryTrigger() needs it to detect a changed setting.
+  PropertiesService.getScriptProperties().setProperty('DAILY_SUMMARY_HOUR', String(hour));
 
   Logger.log('✓ Daily summary trigger set: every day at ' + hour + ':00');
   return { success: true, hour };
@@ -516,8 +526,34 @@ function removeDailySummaryTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'sendDailySummary')
     .forEach(t => ScriptApp.deleteTrigger(t));
+  PropertiesService.getScriptProperties().deleteProperty('DAILY_SUMMARY_HOUR');
   Logger.log('✓ Daily summary trigger removed');
   return { success: true };
+}
+
+// Brings the installed trigger in line with the current settings.
+// Without this, editing dailySummaryEnabled/dailySummaryTime in the Settings
+// sheet changed nothing until someone ran RESET or REPAIR from the editor —
+// the summary kept arriving at the old hour, or never started at all.
+function reconcileDailySummaryTrigger() {
+  const settings = getSettings();
+  const existing = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'sendDailySummary');
+
+  if (settings.dailySummaryEnabled !== 'true') {
+    if (existing.length) removeDailySummaryTrigger();
+    return { enabled: false, removed: existing.length };
+  }
+
+  const parsed = parseInt(settings.dailySummaryTime);
+  const wanted = isNaN(parsed) ? 21 : parsed;
+  const installed = PropertiesService.getScriptProperties().getProperty('DAILY_SUMMARY_HOUR');
+
+  if (existing.length === 1 && installed === String(wanted)) {
+    return { enabled: true, unchanged: true, hour: wanted };
+  }
+  installDailySummaryTrigger();
+  return { enabled: true, reinstalled: true, hour: wanted };
 }
 
 

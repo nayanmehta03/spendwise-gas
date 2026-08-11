@@ -1,0 +1,24 @@
+# Whitelist — only push files clasp/Apps Script actually needs.
+# Anything not explicitly un-ignored below is skipped, so README, screenshots,
+# git metadata, and legacy files like shard-functions.js (duplicates functions
+# already in AdminOps.js — pushing it causes duplicate-declaration errors)
+# never reach the script project.
+**/**
+
+!appsscript.json
+
+!Code.js
+!AdminOps.js
+!ChatHandler.js
+!EmailIngestion.js
+
+!index.html
+!shared-nav.html
+!shared-styles.html
+!page-add.html
+!page-dashboard.html
+!page-expenses.html
+!page-analytics.html
+!page-income.html
+!page-standing.html
+!page-settings.html

@@ -133,6 +133,7 @@
         totalTransactions: stats.totalTransactions || 0,
         avgPerDay: stats.avgPerDay || 0,
         avgPerTransaction: stats.avgPerTransaction || 0,
+        periodDays: stats.periodDays || 0,
         topCategories: stats.topCategory ? [stats.topCategory] : [],
       },
       budgetSummary: budget.budgetSummary || [],
@@ -165,7 +166,7 @@
     <div class="stat-card accent-blue">
       <div class="stat-label">Daily Average</div>
       <div class="stat-value">${fmt(a.avgPerDay)}</div>
-      <div class="stat-sub">per day</div>
+      <div class="stat-sub">${a.periodDays ? 'over ' + a.periodDays + ' days' : 'per day'}</div>
     </div>
     <div class="stat-card accent-orange">
       <div class="stat-label">Avg per Txn</div>

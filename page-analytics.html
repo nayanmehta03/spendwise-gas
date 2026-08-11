@@ -287,7 +287,7 @@
   function _emptyAnalyticsClient() {
     return {
       totalSpent: 0, totalTransactions: 0, avgPerDay: 0, avgPerTransaction: 0,
-      topCategories: [], trends: [], shardCount: 0
+      topCategories: [], trends: [], shardCount: 0, periodDays: 0
     };
   }
 
@@ -307,7 +307,7 @@
       <div class="stat-card accent-blue">
         <div class="stat-label">Daily Average</div>
         <div class="stat-value">${fmt(a.avgPerDay)}</div>
-        <div class="stat-sub">per day</div>
+        <div class="stat-sub">${a.periodDays ? 'over ' + a.periodDays + ' days' : 'per day'}</div>
       </div>
       <div class="stat-card accent-orange">
         <div class="stat-label">Per Transaction</div>
@@ -323,8 +323,13 @@
 
     // Daily bar
     const trends = a.trends || [];
+    // Longer periods come back bucketed by week or month, each point carrying
+    // its own label — fall back to d/m only for a payload without one
     _analyticsCharts.bar = makeBarChart('aBarChart',
-      trends.map(t => { const d = new Date(t.date); return `${d.getDate()}/${d.getMonth() + 1}`; }),
+      trends.map(t => t.label || (() => {
+        const d = new Date(t.date + 'T00:00:00');
+        return `${d.getDate()}/${d.getMonth() + 1}`;
+      })()),
       trends.map(t => t.amount));
 
     // Donut — all non-zero categories, legend on the side

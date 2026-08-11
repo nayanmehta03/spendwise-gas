@@ -79,7 +79,17 @@ const DEFAULT_SETTINGS = {
   // Email ingestion (opt-in)
   emailIngestionEnabled: 'false',
   emailIngestionIntervalMinutes: '15',
+  // Recurring reminder email (opt-in) — sent N days before each due date
+  recurringReminderEnabled: 'false',
+  recurringReminderTime: '9',
+  recurringReminderEmail: '',
+  recurringReminderDaysBefore: '1',
 };
+
+// How many days back processStandingInstructions() will look for occurrences
+// it missed (trigger failure, auth lapse). Only occurrences AFTER the SI's
+// LastLoggedDate are caught up, so this can never re-log history.
+const SI_CATCHUP_DAYS = 3;
 
 const _ssCache = {};
 function _openSS(id) {
@@ -119,6 +129,13 @@ function doGet(e) {
   if (!activeEmail || activeEmail !== ownerEmail) {
     return HtmlService.createHtmlOutput('<h1>🔒 Unauthorized</h1><p>You do not have permission to access this application.</p>');
   }
+
+  // Remember our own URL so reminder emails can link back to us
+  _rememberWebAppUrl();
+
+  // One-click actions from reminder emails — handled before page routing
+  const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+  if (action === 'logSI' || action === 'undoSI') return _handleSIEmailAction(action, e.parameter);
 
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'add';
   const validPages = ['add', 'dashboard', 'expenses', 'analytics', 'settings', 'income', 'standing'];
@@ -222,14 +239,8 @@ function _initConfigSheet(firstShardId) {
     sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
-  if (!ss.getSheetByName(SI_TAB)) {
-    const sheet = ss.insertSheet(SI_TAB);
-    const headers = ['ID', 'Name', 'Category', 'Amount', 'Frequency', 'DayOfMonth', 'DayOfWeek',
-      'StartDate', 'EndDate', 'PaymentMethod', 'Notes', 'AutoLog', 'IsActive', 'LastLoggedDate'];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
-    sheet.setFrozenRows(1);
-  }
+  // _getSISheet() owns the schema and migrates existing sheets to it
+  _getSISheet();
   // ── KeywordMap tab ───────────────────────────────────────────
   if (!ss.getSheetByName(KEYWORD_MAP_TAB)) {
     const sheet = ss.insertSheet(KEYWORD_MAP_TAB);
@@ -438,6 +449,18 @@ function saveSettings(settings) {
   const rows = Object.entries(merged);
   if (rows.length) sheet.getRange(2, 1, rows.length, 2).setValues(rows);
   SCRIPT_CACHE.remove('settings');
+
+  // The daily Chat summary has no Settings UI, so its keys are edited directly
+  // in the sheet — reconcile the trigger whenever they change, or the new time
+  // silently never takes effect. Runs after the cache clear so it reads fresh.
+  const touchesDailySummary = settings && (
+    Object.prototype.hasOwnProperty.call(settings, 'dailySummaryEnabled') ||
+    Object.prototype.hasOwnProperty.call(settings, 'dailySummaryTime'));
+  if (touchesDailySummary) {
+    try { reconcileDailySummaryTrigger(); }
+    catch (e) { Logger.log('reconcileDailySummaryTrigger error: ' + e.message); }
+  }
+
   return { success: true };
 }
 
@@ -475,8 +498,10 @@ function getExpenses(filters) {
 // Used by getAnalytics() and getMonthlyComparison() to avoid duplication.
 function _periodStartDate(period, now) {
   const d = new Date(now);
-  if (period === 'week') d.setDate(now.getDate() - 7);
-  else if (period === 'month') d.setDate(now.getDate() - 30);
+  // Trailing windows are filtered inclusively at both ends, so subtracting the
+  // full N produced N+1 days — 'week' was really 8 days and 'month' 31.
+  if (period === 'week') d.setDate(now.getDate() - 6);
+  else if (period === 'month') d.setDate(now.getDate() - 29);
   else if (period === 'current_month') { d.setDate(1); d.setHours(0, 0, 0, 0); }
   else if (period === 'quarter') d.setMonth(now.getMonth() - 3);
   else if (period === 'half') d.setMonth(now.getMonth() - 6);
@@ -489,8 +514,62 @@ function _periodStartDate(period, now) {
 function _emptyAnalytics() {
   return {
     totalSpent: 0, totalTransactions: 0, avgPerDay: 0, avgPerTransaction: 0,
-    topCategories: [], trends: [], shardCount: 0
+    topCategories: [], trends: [], shardCount: 0, periodDays: 0
   };
+}
+
+// Days elapsed in a period, counting both ends. avgPerDay used to divide by a
+// hardcoded 30 whatever the period, so "This Week" was shown as a 30-day
+// average and "This Month" was only ever right on the 30th of the month.
+function _elapsedDays(startDateStr, endDateStr) {
+  const start = _parseLocalDate(startDateStr);
+  const end = _parseLocalDate(endDateStr);
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+
+// Builds the trend series for the period being viewed. This was hardcoded to
+// the last 30 days, so "Last 6 Months" and "This Year" plotted an identical
+// 30-bar chart. Longer periods are bucketed so the chart stays readable, and
+// each point carries its own axis label.
+function _buildTrends(byDay, startDateStr, endDateStr, tz) {
+  const days = _elapsedDays(startDateStr, endDateStr);
+  const bucketDays = days <= 31 ? 1 : days <= 130 ? 7 : 0; // 0 = calendar month
+  const end = _parseLocalDate(endDateStr);
+  const out = [];
+
+  if (bucketDays === 0) {
+    const cursor = _parseLocalDate(startDateStr);
+    cursor.setDate(1);
+    while (cursor <= end) {
+      const key = Utilities.formatDate(cursor, tz, 'yyyy-MM');
+      let amount = 0;
+      Object.keys(byDay).forEach(d => { if (d.substring(0, 7) === key) amount += byDay[d]; });
+      out.push({
+        date: key + '-01',
+        amount: Math.round(amount * 100) / 100,
+        label: Utilities.formatDate(cursor, tz, 'MMM')
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return out;
+  }
+
+  const cursor = _parseLocalDate(startDateStr);
+  while (cursor <= end) {
+    const bucketStart = new Date(cursor);
+    let amount = 0;
+    // Inner loop always advances at least once, so the outer loop terminates
+    for (let i = 0; i < bucketDays && cursor <= end; i++) {
+      amount += byDay[Utilities.formatDate(cursor, tz, 'yyyy-MM-dd')] || 0;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    out.push({
+      date: Utilities.formatDate(bucketStart, tz, 'yyyy-MM-dd'),
+      amount: Math.round(amount * 100) / 100,
+      label: Utilities.formatDate(bucketStart, tz, 'd/M')
+    });
+  }
+  return out;
 }
 
 function getAnalytics(period) {
@@ -521,16 +600,13 @@ function getAnalytics(period) {
       } catch (shardErr) { Logger.log('Analytics shard error ' + id + ': ' + shardErr.message); }
     });
 
-    const trends = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const k = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-      trends.push({ date: k, amount: byDay[k] || 0 });
-    }
+    const todayStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const periodDays = _elapsedDays(startDateStr, todayStr);
+    const trends = _buildTrends(byDay, startDateStr, todayStr, tz);
 
     const result = {
-      totalSpent: Math.round(totalSpent * 100) / 100, totalTransactions,
-      avgPerDay: Math.round((totalSpent / 30) * 100) / 100,
+      totalSpent: Math.round(totalSpent * 100) / 100, totalTransactions, periodDays,
+      avgPerDay: Math.round((totalSpent / periodDays) * 100) / 100,
       avgPerTransaction: totalTransactions > 0 ? Math.round((totalSpent / totalTransactions) * 100) / 100 : 0,
       topCategories: Object.entries(byCategory).sort((a, b) => b[1] - a[1])
         .map(([cat, amt]) => ({
@@ -643,7 +719,9 @@ function getBudgetSummary() {
     return {
       category: cat.name, icon: cat.icon, budget: cat.budget, spent,
       remaining: cat.budget - spent,
-      percentage: cat.budget > 0 ? Math.min(100, Math.round((spent / cat.budget) * 100)) : 0
+      // NOT capped at 100 — a category at 3x its budget must be able to say so.
+      // Consumers clamp separately where a bar width needs it.
+      percentage: cat.budget > 0 ? Math.round((spent / cat.budget) * 100) : 0
     };
   });
 }
@@ -655,7 +733,7 @@ function getAnalyticsSummary(period) {
     return {
       totalSpent: a.totalSpent, totalTransactions: a.totalTransactions,
       avgPerDay: a.avgPerDay, avgPerTransaction: a.avgPerTransaction,
-      shardCount: a.shardCount || 1,
+      periodDays: a.periodDays || 0, shardCount: a.shardCount || 1,
       topCategories: (a.topCategories || []).filter(c => c.amount > 0)
     };
   } catch (e) { Logger.log('getAnalyticsSummary: ' + e.message); return _emptyAnalytics(); }
@@ -688,12 +766,13 @@ function getDashboardStats() {
       totalTransactions: a.totalTransactions,
       avgPerDay: a.avgPerDay,
       avgPerTransaction: a.avgPerTransaction,
+      periodDays: a.periodDays || 0,
       topCategory: (a.topCategories && a.topCategories[0]) ? a.topCategories[0] : null,
       lastUpdated: new Date().toISOString()
     };
   } catch (e) {
     Logger.log('getDashboardStats error: ' + e.message);
-    return { totalSpent: 0, totalTransactions: 0, avgPerDay: 0, avgPerTransaction: 0, topCategory: null, lastUpdated: new Date().toISOString() };
+    return { totalSpent: 0, totalTransactions: 0, avgPerDay: 0, avgPerTransaction: 0, periodDays: 0, topCategory: null, lastUpdated: new Date().toISOString() };
   }
 }
 
@@ -942,7 +1021,19 @@ function getAllIncome() {
 // of the Config sheet. Auto-logged daily by processStandingInstructions().
 
 const SI_COLUMNS = ['ID', 'Name', 'Category', 'Amount', 'Frequency', 'DayOfMonth', 'DayOfWeek',
-  'StartDate', 'EndDate', 'PaymentMethod', 'Notes', 'AutoLog', 'IsActive', 'LastLoggedDate', 'CustomIntervalDays'];
+  'StartDate', 'EndDate', 'PaymentMethod', 'Notes', 'AutoLog', 'IsActive', 'LastLoggedDate', 'CustomIntervalDays',
+  'LoggedOccurrences', 'LastRemindedOccurrence'];
+
+// Column numbers (1-based) for the fields written outside of the full-row writes.
+const SI_COL_LAST_LOGGED = 14;
+const SI_COL_CUSTOM_INTERVAL = 15;
+const SI_COL_LOGGED_OCCURRENCES = 16;
+const SI_COL_LAST_REMINDED = 17;
+
+// Keeps the LoggedOccurrences cell bounded — a weekly SI would otherwise grow
+// this by 52 dates a year. Older occurrences fall out of the reminder/catch-up
+// window long before this cap is reached.
+const SI_MAX_OCCURRENCE_HISTORY = 30;
 
 function _getSISheet() {
   const ss = getConfigSS();
@@ -952,6 +1043,15 @@ function _getSISheet() {
     sheet.getRange(1, 1, 1, SI_COLUMNS.length).setValues([SI_COLUMNS]);
     sheet.getRange(1, 1, 1, SI_COLUMNS.length).setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // Migration — sheets created before v1.3 are missing trailing columns.
+  // Append any header the current schema expects but the sheet doesn't have.
+  const width = sheet.getLastColumn();
+  if (width < SI_COLUMNS.length) {
+    const missing = SI_COLUMNS.slice(width);
+    sheet.getRange(1, width + 1, 1, missing.length).setValues([missing])
+      .setBackground('#1a1a2e').setFontColor('#fff').setFontWeight('bold');
   }
   return sheet;
 }
@@ -974,7 +1074,16 @@ function _rowToSI(r) {
     isActive: r[12] === true || r[12] === 'true' || r[12] === 'TRUE' || r[12] === '',
     lastLoggedDate: r[13] ? Utilities.formatDate(new Date(r[13]), tz, 'yyyy-MM-dd') : '',
     customIntervalDays: parseInt(r[14]) || 0,
+    loggedOccurrences: _parseOccurrenceList(r[15]),
+    lastRemindedOccurrence: r[16] ? String(r[16]).trim() : '',
   };
+}
+
+// LoggedOccurrences is stored as a comma-separated yyyy-MM-dd list so the cell
+// stays human-readable in the sheet.
+function _parseOccurrenceList(raw) {
+  if (!raw) return [];
+  return String(raw).split(',').map(s => s.trim()).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s));
 }
 
 function getStandingInstructions() {
@@ -1030,8 +1139,9 @@ function updateStandingInstruction(id, si) {
           si.paymentMethod || 'Auto-debit', si.notes || '',
           si.autoLog === true || si.autoLog === 'true'
         ]]);
-        // Write CustomIntervalDays (column 15) separately
-        sheet.getRange(i + 1, 15).setValue(parseInt(si.customIntervalDays) || 0);
+        // Write CustomIntervalDays separately — it sits after LastLoggedDate,
+        // which this update must not touch
+        sheet.getRange(i + 1, SI_COL_CUSTOM_INTERVAL).setValue(parseInt(si.customIntervalDays) || 0);
         SCRIPT_CACHE.remove('si_all');
         return { success: true };
       }
@@ -1079,42 +1189,147 @@ function toggleStandingInstruction(id, isActive) {
   }
 }
 
-// Manually log a single SI as an expense entry now.
-// Called from the UI quick-log button.
-function logStandingInstruction(id) {
+// Log a single SI occurrence as an expense.
+// occurrenceDate (yyyy-MM-dd) identifies WHICH due date is being settled and
+// defaults to today — that is what makes the call idempotent, so the same
+// occurrence can never be logged twice from the UI, the email button and the
+// auto-log trigger all at once.
+function logStandingInstruction(id, occurrenceDate) {
   try {
     const all = getStandingInstructions();
     const si = all.find(s => s.id === id);
     if (!si) return { success: false, message: 'Standing instruction not found.' };
     if (!si.isActive) return { success: false, message: 'This instruction is paused.' };
 
-    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const tz = Session.getScriptTimeZone();
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const occurrence = /^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate || '') ? occurrenceDate : today;
+
+    if (_isOccurrenceLogged(si, occurrence)) {
+      return { success: false, alreadyLogged: true, message: si.name + ' is already logged for ' + occurrence + '.' };
+    }
+
+    const expenseDate = _expenseDateForOccurrence(occurrence, today);
     const result = addExpense({
-      date: today,
+      date: expenseDate,
       category: si.category,
       description: si.name,
       amount: si.amount,
       paymentMethod: si.paymentMethod,
-      notes: si.notes + (si.notes ? ' · ' : '') + '[Standing: ' + si.id + ']'
+      notes: si.notes + (si.notes ? ' · ' : '') + '[Standing: ' + si.id + ' · due ' + occurrence + ']'
     });
 
-    if (result.success) {
-      // Update LastLoggedDate
-      const sheet = _getSISheet();
-      const data = sheet.getDataRange().getValues();
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === id) {
-          sheet.getRange(i + 1, 14).setValue(today); // LastLoggedDate column
-          break;
-        }
-      }
-      SCRIPT_CACHE.remove('si_all');
-    }
-    return result;
+    if (result.success) _recordSIOccurrence(id, occurrence, expenseDate);
+    return { ...result, occurrenceDate: occurrence, expenseDate, name: si.name, amount: si.amount };
   } catch (e) {
     Logger.log('logStandingInstruction error: ' + e.message);
     return { success: false, message: e.message };
   }
+}
+
+// Expenses always land in the ACTIVE shard, and shards are pruned by month at
+// read time — so an expense dated outside the active shard's month would go
+// missing from later queries. Log-ahead (clicking "Log" from a reminder for
+// next month's rent) therefore falls back to today's date; the true due date is
+// still recorded in the notes and in LoggedOccurrences.
+function _expenseDateForOccurrence(occurrence, today) {
+  return occurrence.substring(0, 7) === _getActiveShardMonth(today) ? occurrence : today;
+}
+
+function _getActiveShardMonth(today) {
+  try {
+    const activeId = getActiveShardId();
+    const rec = _getAllShardRecords().find(s => s.id === activeId);
+    if (rec && rec.month) return rec.month;
+  } catch (e) { }
+  return today.substring(0, 7);
+}
+
+// Appends an occurrence to the ledger and refreshes LastLoggedDate.
+function _recordSIOccurrence(id, occurrence, expenseDate) {
+  const sheet = _getSISheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== id) continue;
+    const list = _parseOccurrenceList(data[i][SI_COL_LOGGED_OCCURRENCES - 1]);
+    if (list.indexOf(occurrence) === -1) list.push(occurrence);
+    list.sort();
+    sheet.getRange(i + 1, SI_COL_LAST_LOGGED).setValue(expenseDate || occurrence);
+    sheet.getRange(i + 1, SI_COL_LOGGED_OCCURRENCES)
+      .setValue(list.slice(-SI_MAX_OCCURRENCE_HISTORY).join(','));
+    break;
+  }
+  SCRIPT_CACHE.remove('si_all');
+}
+
+function _forgetSIOccurrence(id, occurrence) {
+  const sheet = _getSISheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== id) continue;
+    const list = _parseOccurrenceList(data[i][SI_COL_LOGGED_OCCURRENCES - 1]).filter(d => d !== occurrence);
+    sheet.getRange(i + 1, SI_COL_LOGGED_OCCURRENCES).setValue(list.join(','));
+    sheet.getRange(i + 1, SI_COL_LAST_LOGGED).setValue(list.length ? list[list.length - 1] : '');
+    break;
+  }
+  SCRIPT_CACHE.remove('si_all');
+}
+
+// Has this specific due date already been settled?
+//
+// Rows written before the LoggedOccurrences ledger existed have no per-occurrence
+// history, so for those we fall back to the old month-granularity rule — but only
+// for frequencies that genuinely occur at most once a month. Weekly and custom
+// SIs get no fallback, which is exactly the bug the ledger fixes.
+function _isOccurrenceLogged(si, dueDate) {
+  const ledger = si.loggedOccurrences || [];
+  if (ledger.indexOf(dueDate) !== -1) return true;
+  if (ledger.length > 0) return false;
+  const oncePerMonth = ['monthly', 'quarterly', 'yearly'].indexOf(si.frequency) !== -1;
+  return oncePerMonth && !!si.lastLoggedDate && si.lastLoggedDate.substring(0, 7) === dueDate.substring(0, 7);
+}
+
+// Undo a log made from an email reminder — deletes the expense and releases the
+// occurrence so it shows as due again.
+function undoStandingLog(id, occurrenceDate, expenseId) {
+  try {
+    if (expenseId) deleteExpense(expenseId);
+    _forgetSIOccurrence(id, occurrenceDate);
+    return { success: true };
+  } catch (e) {
+    Logger.log('undoStandingLog error: ' + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+// Expands every active SI into individual occurrences between two dates,
+// each tagged with its own logged status. This is the single source of truth
+// for the Recurring page, the auto-log trigger, the reminder email and the
+// weekly report — none of which are limited to one calendar month any more.
+function getSIOccurrences(fromStr, toStr, opts) {
+  opts = opts || {};
+  const tz = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  const out = [];
+
+  getStandingInstructions()
+    .filter(si => si.isActive || opts.includePaused)
+    .filter(si => opts.autoLogOnly ? si.autoLog : true)
+    .forEach(si => {
+      _getDueDatesInRange(si, fromStr, toStr, tz).forEach(dueDate => {
+        const logged = _isOccurrenceLogged(si, dueDate);
+        if (opts.unloggedOnly && logged) return;
+        const daysDiff = Math.round((_parseLocalDate(dueDate) - _parseLocalDate(today)) / 86400000);
+        const status = logged ? 'logged'
+          : dueDate < today ? 'overdue'
+            : daysDiff <= 3 ? 'due_soon'
+              : 'upcoming';
+        out.push({ ...si, dueDate, status, daysDiff, isLogged: logged });
+      });
+    });
+
+  out.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name));
+  return out;
 }
 
 // Returns SIs due in the current calendar month with their logged status.
@@ -1123,26 +1338,9 @@ function getUpcomingSIs() {
   try {
     const tz = Session.getScriptTimeZone();
     const now = new Date();
-    const month = Utilities.formatDate(now, tz, 'yyyy-MM');
-    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-    const allSIs = getStandingInstructions().filter(si => si.isActive);
-    const upcoming = [];
-
-    allSIs.forEach(si => {
-      const dueDates = _getDueDatesInMonth(si, month, tz);
-      dueDates.forEach(dueDate => {
-        const isLogged = si.lastLoggedDate && si.lastLoggedDate.substring(0, 7) === month;
-        const daysDiff = Math.ceil((new Date(dueDate) - now) / 86400000);
-        const status = isLogged ? 'logged'
-          : dueDate < today ? 'overdue'
-            : daysDiff <= 3 ? 'due_soon'
-              : 'upcoming';
-        upcoming.push({ ...si, dueDate, status, daysDiff });
-      });
-    });
-
-    upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    return upcoming;
+    const monthStart = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), tz, 'yyyy-MM-dd');
+    const monthEnd = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0), tz, 'yyyy-MM-dd');
+    return getSIOccurrences(monthStart, monthEnd);
   } catch (e) {
     Logger.log('getUpcomingSIs error: ' + e.message);
     return [];
@@ -1204,36 +1402,64 @@ function getStandingPageData() {
 }
 
 // Auto-log trigger — called daily at 07:00 by a time-based trigger.
-// Processes all active SIs and logs those due today with AutoLog=true.
+// Logs every unlogged AutoLog occurrence due today, plus any it missed in the
+// last SI_CATCHUP_DAYS days (a skipped trigger run used to lose that occurrence
+// permanently). Occurrences on or before the SI's LastLoggedDate are never
+// caught up, so rows that predate the ledger can't be re-logged retroactively.
 function processStandingInstructions() {
   const tz = Session.getScriptTimeZone();
-  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  const month = today.substring(0, 7);
-  const allSIs = getStandingInstructions().filter(si => si.isActive && si.autoLog);
-  let logged = 0, skipped = 0;
+  const now = new Date();
+  const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const from = Utilities.formatDate(new Date(now.getTime() - SI_CATCHUP_DAYS * 86400000), tz, 'yyyy-MM-dd');
 
-  allSIs.forEach(si => {
+  const due = getSIOccurrences(from, today, { autoLogOnly: true, unloggedOnly: true })
+    .filter(o => o.dueDate === today || !o.lastLoggedDate || o.dueDate > o.lastLoggedDate);
+
+  let logged = 0, failed = 0;
+  due.forEach(o => {
     try {
-      if (si.lastLoggedDate && si.lastLoggedDate.substring(0, 7) === month) { skipped++; return; }
-      if (si.startDate && today < si.startDate) { skipped++; return; }
-      if (si.endDate && today > si.endDate) { skipped++; return; }
-
-      const dueDates = _getDueDatesInMonth(si, month, tz);
-      const isDueToday = dueDates.some(d => d === today);
-      if (!isDueToday) return;
-
-      const result = logStandingInstruction(si.id);
-      if (result.success) { logged++; Logger.log('Auto-logged: ' + si.name); }
+      const result = logStandingInstruction(o.id, o.dueDate);
+      if (result.success) {
+        logged++;
+        Logger.log('Auto-logged: ' + o.name + ' (due ' + o.dueDate + ')' + (o.dueDate < today ? ' [catch-up]' : ''));
+      } else if (!result.alreadyLogged) {
+        failed++;
+        Logger.log('Auto-log failed for ' + o.name + ': ' + result.message);
+      }
     } catch (e) {
-      Logger.log('processStandingInstructions error for ' + si.id + ': ' + e.message);
+      failed++;
+      Logger.log('processStandingInstructions error for ' + o.id + ': ' + e.message);
     }
   });
 
-  Logger.log('processStandingInstructions: logged=' + logged + ' skipped=' + skipped);
-  return { logged, skipped };
+  Logger.log('processStandingInstructions: logged=' + logged + ' failed=' + failed + ' candidates=' + due.length);
+  return { logged, failed, candidates: due.length };
 }
 
 // ── SI helpers ───────────────────────────────────────────────
+
+// Returns due dates for an SI across an arbitrary date range by walking the
+// calendar months it spans. Ranges that cross a month boundary are the whole
+// point: a reminder sent on 31 Jan has to know about rent due 1 Feb.
+function _getDueDatesInRange(si, fromStr, toStr, tz) {
+  if (!fromStr || !toStr || toStr < fromStr) return [];
+  const out = [];
+  let year = parseInt(fromStr.substring(0, 4));
+  let mIndex = parseInt(fromStr.substring(5, 7)) - 1;
+  const endYear = parseInt(toStr.substring(0, 4));
+  const endMIndex = parseInt(toStr.substring(5, 7)) - 1;
+
+  let guard = 0;
+  while ((year < endYear || (year === endYear && mIndex <= endMIndex)) && guard++ < 120) {
+    const month = year + '-' + ('0' + (mIndex + 1)).slice(-2);
+    _getDueDatesInMonth(si, month, tz).forEach(d => {
+      if (d >= fromStr && d <= toStr) out.push(d);
+    });
+    mIndex++;
+    if (mIndex > 11) { mIndex = 0; year++; }
+  }
+  return out;
+}
 
 // Returns due dates (yyyy-MM-dd strings) for a given SI within a month.
 function _getDueDatesInMonth(si, month, tz) {
@@ -1257,25 +1483,24 @@ function _getDueDatesInMonth(si, month, tz) {
     }
 
   } else if (si.frequency === 'quarterly') {
-    // Due only if current month is in the correct quarter cycle from start date
-    if (si.startDate) {
-      const startMonth = parseInt(si.startDate.substring(5, 7)) - 1;
-      if ((mIndex - startMonth + 12) % 3 === 0) {
-        const day = si.dayOfMonth || 1;
-        const maxDay = new Date(year, mIndex + 1, 0).getDate();
-        const d = new Date(year, mIndex, Math.min(day, maxDay));
-        dates.push(Utilities.formatDate(d, tz, 'yyyy-MM-dd'));
-      }
+    // Anchored on the start month; without one, fall back to calendar quarters
+    // (Jan/Apr/Jul/Oct) rather than never being due at all.
+    const startMonth = si.startDate ? parseInt(si.startDate.substring(5, 7)) - 1 : 0;
+    if ((mIndex - startMonth + 12) % 3 === 0) {
+      const day = si.dayOfMonth || 1;
+      const maxDay = new Date(year, mIndex + 1, 0).getDate();
+      const d = new Date(year, mIndex, Math.min(day, maxDay));
+      dates.push(Utilities.formatDate(d, tz, 'yyyy-MM-dd'));
     }
 
   } else if (si.frequency === 'yearly') {
-    if (si.startDate) {
-      const startM = parseInt(si.startDate.substring(5, 7)) - 1;
-      const startD = parseInt(si.startDate.substring(8, 10));
-      if (mIndex === startM) {
-        const d = new Date(year, mIndex, startD);
-        dates.push(Utilities.formatDate(d, tz, 'yyyy-MM-dd'));
-      }
+    // Anchored on the start date; without one, use January + DayOfMonth.
+    const startM = si.startDate ? parseInt(si.startDate.substring(5, 7)) - 1 : 0;
+    const startD = si.startDate ? parseInt(si.startDate.substring(8, 10)) : (si.dayOfMonth || 1);
+    if (mIndex === startM) {
+      const maxDay = new Date(year, mIndex + 1, 0).getDate();
+      const d = new Date(year, mIndex, Math.min(startD, maxDay));
+      dates.push(Utilities.formatDate(d, tz, 'yyyy-MM-dd'));
     }
 
   } else if (si.frequency === 'custom' && si.customIntervalDays > 0 && si.startDate) {
@@ -1366,26 +1591,63 @@ function weeklyReportTrigger() {
   sendWeeklyReport(email);
 }
 
+// Run this function from the Apps Script Editor dropdown to trigger the Google OAuth permission popup!
+// MUST NOT use try/catch so Apps Script intercepts the scope requirement and prompts for consent.
+function GRANT_EMAIL_PERMISSIONS() {
+  const quota = MailApp.getRemainingDailyQuota();
+  Logger.log('✓ MailApp permission granted successfully! Remaining daily quota: ' + quota);
+  return 'Permission active! Quota: ' + quota;
+}
+
 // Checks if MailApp permission has been granted by trying a no-op
 // call that requires the same scope but sends nothing.
 // Returns { granted: true } or { granted: false, message, instructions }
 function checkMailPermission() {
+  let executingAs = '';
+  try { executingAs = Session.getEffectiveUser().getEmail() || ''; } catch (e) { }
+
   try {
-    MailApp.getRemainingDailyQuota(); // requires gmail.send scope, sends nothing
-    return { granted: true };
+    MailApp.getRemainingDailyQuota(); // requires script.send_mail scope, sends nothing
+    return { granted: true, email: executingAs };
   } catch (e) {
+    var errMsg = (e && e.message) ? e.message : String(e);
+    Logger.log('checkMailPermission error: ' + errMsg);
+
+    let editorUrl = '';
+    try { editorUrl = 'https://script.google.com/home/projects/' + ScriptApp.getScriptId() + '/edit'; } catch (e2) { }
+
     return {
       granted: false,
-      message: e.message,
+      message: errMsg,
+      email: executingAs,
+      editorUrl: editorUrl,
       instructions: [
-        '1. Open the Apps Script editor for this project',
-        '2. Select any function in the dropdown (e.g. STATUS)',
-        '3. Click Run — Google will show an authorization dialog',
-        '4. Click "Review permissions" → choose your account → Allow',
-        '5. Return here and save report settings again'
+        '1. Click "Open Apps Script Editor" below',
+        '2. In the top dropdown, select "GRANT_EMAIL_PERMISSIONS"',
+        '3. Click Run. Google will show the "Authorization Required" popup!',
+        '4. Click "Review permissions" → choose ' + (executingAs || 'your account') + ' → "Advanced" → "Go to Spendwise (unsafe)" → "Allow"',
+        '5. Return here and click Save or Send Test again!'
       ]
     };
   }
+}
+
+// Returns the most recent COMPLETE week [start, end], honouring the configured
+// week start day. Reporting the *current* partial week meant the default
+// schedule (send on Monday, week starts Monday) covered midnight → 08:00 and
+// reported ₹0 against a full previous week.
+function _lastCompleteWeek(now, weekStartDay) {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const startIdx = Math.max(0, dayNames.indexOf(weekStartDay || 'Monday'));
+
+  const start = new Date(now);
+  start.setHours(12, 0, 0, 0); // noon — never let DST shift the date
+  const daysIntoWeek = (start.getDay() - startIdx + 7) % 7;
+  start.setDate(start.getDate() - daysIntoWeek - 7);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start, end };
 }
 
 // Builds and sends the weekly report. Call from editor to test.
@@ -1393,22 +1655,18 @@ function sendWeeklyReport(toEmail) {
   try {
     const tz = Session.getScriptTimeZone();
     const now = new Date();
+    const settings = getSettings();
 
-    // This week: Mon–today
-    const thisWeekStart = new Date(now);
-    thisWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
-    thisWeekStart.setHours(0, 0, 0, 0);
-
-    // Last week: same 7-day window shifted back
-    const lastWeekStart = new Date(thisWeekStart);
-    lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-    const lastWeekEnd = new Date(thisWeekStart);
-    lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+    // The week being reported on, and the week before it for comparison.
+    // Both windows are a full 7 days, so the percentage change is like-for-like.
+    const week = _lastCompleteWeek(now, settings.weekStartDay);
+    const prevStart = new Date(week.start); prevStart.setDate(week.start.getDate() - 7);
+    const prevEnd = new Date(week.end); prevEnd.setDate(week.end.getDate() - 7);
 
     const fmt2 = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-    const thisWeekExpenses = getExpenses({ startDate: fmt2(thisWeekStart), endDate: fmt2(now) });
-    const lastWeekExpenses = getExpenses({ startDate: fmt2(lastWeekStart), endDate: fmt2(lastWeekEnd) });
-    const thisWeekIncome = getIncome({ startDate: fmt2(thisWeekStart), endDate: fmt2(now) });
+    const thisWeekExpenses = getExpenses({ startDate: fmt2(week.start), endDate: fmt2(week.end) });
+    const lastWeekExpenses = getExpenses({ startDate: fmt2(prevStart), endDate: fmt2(prevEnd) });
+    const thisWeekIncome = getIncome({ startDate: fmt2(week.start), endDate: fmt2(week.end) });
 
     const thisTotal = thisWeekExpenses.reduce((s, e) => s + e.amount, 0);
     const lastTotal = lastWeekExpenses.reduce((s, e) => s + e.amount, 0);
@@ -1428,12 +1686,17 @@ function sendWeeklyReport(toEmail) {
     const pctChange = lastTotal > 0
       ? Math.round(((thisTotal - lastTotal) / lastTotal) * 100)
       : null;
-    const changeStr = pctChange === null ? '' :
-      pctChange > 0 ? `▲ ${pctChange}% vs last week` : `▼ ${Math.abs(pctChange)}% vs last week`;
-    const changeColor = pctChange > 0 ? '#eb5757' : '#6fcf97';
+    // Zero change is neither good nor bad — it used to render as a green decrease
+    const changeStr = pctChange === null ? ''
+      : pctChange > 0 ? `▲ ${pctChange}% vs last week`
+        : pctChange < 0 ? `▼ ${Math.abs(pctChange)}% vs last week`
+          : 'Flat vs last week';
+    const changeColor = pctChange > 0 ? '#eb5757' : pctChange < 0 ? '#6fcf97' : '#8892a4';
+    const changeBg = pctChange > 0 ? 'rgba(235,87,87,0.15)'
+      : pctChange < 0 ? 'rgba(111,207,151,0.15)' : 'rgba(136,146,164,0.15)';
 
-    const weekLabel = Utilities.formatDate(thisWeekStart, tz, 'MMM d') +
-      ' – ' + Utilities.formatDate(now, tz, 'MMM d, yyyy');
+    const weekLabel = Utilities.formatDate(week.start, tz, 'MMM d') +
+      ' – ' + Utilities.formatDate(week.end, tz, 'MMM d, yyyy');
 
     // ── Build HTML email ──────────────────────────────────────
     const fmtRs = amt => '&#8377;' + parseFloat(amt).toLocaleString('en-IN',
@@ -1524,14 +1787,10 @@ function sendWeeklyReport(toEmail) {
         </table>
       </div>` : '';
 
-    // Upcoming standing instructions — due in the next 7 days, not yet logged
-    const tz7 = Session.getScriptTimeZone();
+    // Upcoming standing instructions — due in the next 7 days, not yet logged.
+    // Uses the range expander so items early next month still show up.
     const in7Days = new Date(now); in7Days.setDate(now.getDate() + 7);
-    const in7Str = Utilities.formatDate(in7Days, tz7, 'yyyy-MM-dd');
-    const todayStr2 = Utilities.formatDate(now, tz7, 'yyyy-MM-dd');
-    const upcomingSIs = getUpcomingSIs().filter(si =>
-      si.dueDate >= todayStr2 && si.dueDate <= in7Str && si.status !== 'logged'
-    );
+    const upcomingSIs = getSIOccurrences(fmt2(now), fmt2(in7Days), { unloggedOnly: true });
 
     const upcomingSIRows = upcomingSIs.map(si => {
       const d = new Date(si.dueDate + 'T00:00:00');
@@ -1559,7 +1818,7 @@ function sendWeeklyReport(toEmail) {
 
     // Week-over-week change badge
     const changeBadge = pctChange !== null ?
-      `<span style="display:inline-block;margin-left:10px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:${pctChange > 0 ? 'rgba(235,87,87,0.15)' : 'rgba(111,207,151,0.15)'};color:${changeColor};">${changeStr}</span>` : '';
+      `<span style="display:inline-block;margin-left:10px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:${changeBg};color:${changeColor};">${changeStr}</span>` : '';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -1711,6 +1970,376 @@ function sendTestReport() {
     Session.getActiveUser().getEmail();
   if (!email) return { success: false, message: 'No email address configured.' };
   return sendWeeklyReport(email);
+}
+
+// ── Recurring Reminder Email ──────────────────────────────────
+// Sends a heads-up N days before each due date, with a one-click Log button
+// per manual item. The buttons hit doGet(action=logSI) on the web app.
+
+// The web app can't ask for its own URL from a trigger context reliably, so we
+// capture it the first time the app is opened and reuse it for email links.
+function _getWebAppUrl() {
+  const props = PropertiesService.getScriptProperties();
+  const stored = props.getProperty('WEBAPP_URL');
+  if (stored) return stored;
+  try {
+    const url = ScriptApp.getService().getUrl();
+    if (url) { props.setProperty('WEBAPP_URL', url); return url; }
+  } catch (e) { }
+  return '';
+}
+
+// Called on every page load, so it must stay cheap — bail out once stored.
+function _rememberWebAppUrl() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty('WEBAPP_URL')) return;
+    const url = ScriptApp.getService().getUrl();
+    if (url && url.indexOf('/exec') !== -1) props.setProperty('WEBAPP_URL', url);
+  } catch (e) { }
+}
+
+// Links in email are signed so a stray or forwarded URL can't log an expense.
+// The web app is already owner-only; this is a second lock, not the only one.
+function _siActionSecret() {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty('SI_ACTION_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('SI_ACTION_SECRET', secret);
+  }
+  return secret;
+}
+
+function _siActionToken(payload) {
+  return Utilities.computeHmacSha256Signature(String(payload), _siActionSecret())
+    .map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('').substring(0, 24);
+}
+
+function _siActionUrl(action, params) {
+  const base = _getWebAppUrl();
+  if (!base) return '';
+  const qs = Object.keys(params).map(k => k + '=' + encodeURIComponent(params[k])).join('&');
+  return base + (base.indexOf('?') === -1 ? '?' : '&') + 'action=' + action + '&' + qs;
+}
+
+// Entry point called by the time-based trigger.
+function recurringReminderTrigger() {
+  const settings = getSettings();
+  if (settings.recurringReminderEnabled !== 'true') return;
+  sendRecurringReminders();
+}
+
+// Builds and sends the reminder. Pass { force: true } from the test button to
+// send even when nothing is due and to ignore the already-reminded guard.
+function sendRecurringReminders(opts) {
+  opts = opts || {};
+  try {
+    const settings = getSettings();
+    const email = opts.toEmail || settings.recurringReminderEmail || settings.weeklyReportEmail ||
+      PropertiesService.getScriptProperties().getProperty('OWNER_EMAIL') ||
+      Session.getActiveUser().getEmail();
+    if (!email) return { success: false, message: 'No email address configured.' };
+
+    const tz = Session.getScriptTimeZone();
+    const now = new Date();
+    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const daysBefore = Math.max(0, Math.min(7, parseInt(settings.recurringReminderDaysBefore) || 1));
+    const targetDate = Utilities.formatDate(new Date(now.getTime() + daysBefore * 86400000), tz, 'yyyy-MM-dd');
+    const currency = settings.currency || '₹';
+
+    // Upcoming — the occurrences that fall exactly on the target date
+    let upcoming = getSIOccurrences(targetDate, targetDate, { unloggedOnly: true });
+    if (!opts.force) {
+      upcoming = upcoming.filter(o => !o.lastRemindedOccurrence || o.lastRemindedOccurrence < o.dueDate);
+    }
+
+    // Overdue — anything still unsettled from the last 30 days. Occurrences on
+    // or before LastLoggedDate are excluded so rows that predate the ledger
+    // don't arrive as a wall of false alarms on the first send.
+    const overdueFrom = Utilities.formatDate(new Date(now.getTime() - 30 * 86400000), tz, 'yyyy-MM-dd');
+    const yesterday = Utilities.formatDate(new Date(now.getTime() - 86400000), tz, 'yyyy-MM-dd');
+    const overdue = getSIOccurrences(overdueFrom, yesterday, { unloggedOnly: true })
+      .filter(o => !o.lastLoggedDate || o.dueDate > o.lastLoggedDate);
+
+    if (!upcoming.length && !overdue.length && !opts.force) {
+      Logger.log('sendRecurringReminders: nothing due on ' + targetDate + ', no email sent');
+      return { success: true, skipped: true, reason: 'nothing due' };
+    }
+
+    const manual = upcoming.filter(o => !o.autoLog);
+    const auto = upcoming.filter(o => o.autoLog);
+    const html = _buildReminderEmail({ today, targetDate, daysBefore, manual, auto, overdue, currency, tz });
+
+    const dueTotal = upcoming.reduce((s, o) => s + o.amount, 0);
+    const count = upcoming.length + overdue.length;
+    const whenLabel = daysBefore === 0 ? 'today' : daysBefore === 1 ? 'tomorrow'
+      : 'in ' + daysBefore + ' days';
+    const subject = upcoming.length
+      ? 'Spendwise: ' + currency + Math.round(dueTotal).toLocaleString('en-IN') + ' due ' + whenLabel +
+      ' (' + count + ' item' + (count !== 1 ? 's' : '') + ')'
+      : 'Spendwise: ' + overdue.length + ' recurring item' + (overdue.length !== 1 ? 's' : '') + ' still unlogged';
+
+    MailApp.sendEmail({ to: email, subject, htmlBody: html });
+
+    // Mark the upcoming ones so a re-run today doesn't send twice.
+    // Test sends are excluded — they must never suppress the real reminder.
+    if (!opts.force) {
+      upcoming.forEach(o => {
+        try { _markSIReminded(o.id, o.dueDate); } catch (e) { }
+      });
+    }
+
+    Logger.log('✓ Recurring reminder sent to ' + email + ' (' + upcoming.length + ' upcoming, ' + overdue.length + ' overdue)');
+    return { success: true, upcoming: upcoming.length, overdue: overdue.length };
+  } catch (e) {
+    Logger.log('sendRecurringReminders error: ' + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+function _markSIReminded(id, dueDate) {
+  const sheet = _getSISheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === id) {
+      sheet.getRange(i + 1, SI_COL_LAST_REMINDED).setValue(dueDate);
+      break;
+    }
+  }
+  SCRIPT_CACHE.remove('si_all');
+}
+
+function _buildReminderEmail(ctx) {
+  const fmtAmt = amt => ctx.currency + parseFloat(amt).toLocaleString('en-IN',
+    { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const dateLabel = ds => Utilities.formatDate(_parseLocalDate(ds), ctx.tz, 'EEE, d MMM');
+
+  // Gmail-safe button: a table-wrapped anchor, no flexbox, no external assets.
+  const logButton = o => {
+    const url = _siActionUrl('logSI', { id: o.id, d: o.dueDate, t: _siActionToken(o.id + '|' + o.dueDate) });
+    if (!url) return '<span style="font-size:11px;color:#5c6478;">Open Spendwise to log</span>';
+    return `<a href="${url}" style="display:inline-block;background:#4f8ef7;color:#0a0d14;font-size:12px;font-weight:700;text-decoration:none;padding:7px 14px;border-radius:8px;white-space:nowrap;">Log it</a>`;
+  };
+
+  const itemRow = (o, withButton) => `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid #1e2330;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="vertical-align:top;">
+              <div style="color:#e8ecf0;font-size:14px;font-weight:600;">${o.name}</div>
+              <div style="color:#5c6478;font-size:11px;padding-top:3px;">${o.category} · ${dateLabel(o.dueDate)} · ${o.paymentMethod}</div>
+            </td>
+            <td style="text-align:right;vertical-align:top;white-space:nowrap;padding-left:12px;">
+              <div style="color:#e8ecf0;font-size:15px;font-weight:700;font-family:Georgia,serif;">${fmtAmt(o.amount)}</div>
+              ${withButton ? `<div style="padding-top:7px;">${logButton(o)}</div>` : ''}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+
+  const card = (title, subtitle, rows, accent) => `
+    <table style="width:100%;border-collapse:collapse;background:#1a1f2e;border-radius:14px;border:1px solid ${accent || '#272d3d'};margin-bottom:14px;">
+      <tr>
+        <td style="padding:20px 22px 14px;">
+          <p style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#5c6478;text-transform:uppercase;margin:0 0 2px;">${title}</p>
+          <p style="font-size:11px;color:#5c6478;margin:0 0 8px;">${subtitle}</p>
+          <table style="width:100%;border-collapse:collapse;">${rows}</table>
+        </td>
+      </tr>
+    </table>`;
+
+  const whenLabel = ctx.daysBefore === 0 ? 'today'
+    : ctx.daysBefore === 1 ? 'tomorrow' : 'in ' + ctx.daysBefore + ' days';
+
+  const overdueCard = ctx.overdue.length ? card(
+    'Overdue &#9888;',
+    'Past their due date and not logged yet',
+    ctx.overdue.map(o => itemRow(o, true)).join(''),
+    'rgba(235,87,87,0.35)') : '';
+
+  const manualCard = ctx.manual.length ? card(
+    'Due ' + whenLabel,
+    dateLabel(ctx.targetDate) + ' · tap Log to record it now',
+    ctx.manual.map(o => itemRow(o, true)).join('')) : '';
+
+  const autoCard = ctx.auto.length ? card(
+    'Auto-debit ' + whenLabel,
+    'Logged automatically — no action needed',
+    ctx.auto.map(o => itemRow(o, false)).join('')) : '';
+
+  const grandTotal = [].concat(ctx.manual, ctx.auto, ctx.overdue).reduce((s, o) => s + o.amount, 0);
+  const appUrl = _getWebAppUrl();
+  const emptyNote = (!ctx.overdue.length && !ctx.manual.length && !ctx.auto.length)
+    ? `<table style="width:100%;border-collapse:collapse;background:#1a1f2e;border-radius:14px;border:1px solid #272d3d;margin-bottom:14px;">
+         <tr><td style="padding:22px;text-align:center;color:#5c6478;font-size:13px;">Nothing due ${whenLabel}. This is what a quiet day looks like.</td></tr>
+       </table>` : '';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#0a0d14;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <div style="max-width:540px;margin:0 auto;padding:32px 16px 48px;">
+
+    <div style="margin-bottom:24px;">
+      <span style="font-size:18px;font-weight:800;color:#e8ecf0;letter-spacing:-0.02em;">Spendwise</span>
+      <span style="font-size:12px;color:#5c6478;margin-left:8px;">Recurring Reminder</span>
+    </div>
+
+    <p style="font-size:13px;color:#8892a4;margin:0 0 20px;">
+      ${grandTotal > 0 ? fmtAmt(grandTotal) + ' across ' + (ctx.manual.length + ctx.auto.length + ctx.overdue.length) + ' item' + ((ctx.manual.length + ctx.auto.length + ctx.overdue.length) !== 1 ? 's' : '') : 'Your recurring commitments'}
+    </p>
+
+    ${overdueCard}
+    ${manualCard}
+    ${autoCard}
+    ${emptyNote}
+
+    <table style="width:100%;border-collapse:collapse;">
+      <tr>
+        <td style="padding-top:8px;text-align:center;">
+          ${appUrl ? `<a href="${appUrl}?page=standing" style="display:inline-block;color:#4f8ef7;font-size:12px;font-weight:600;text-decoration:none;">Open Recurring in Spendwise &rarr;</a>` : ''}
+          <p style="font-size:11px;color:#3a4050;margin:14px 0 0;">
+            You're receiving this because recurring reminders are enabled in your Spendwise settings.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</body>
+</html>`;
+}
+
+// Install or update the reminder trigger based on current settings.
+function scheduleRecurringReminder() {
+  cancelRecurringReminder();
+
+  const settings = getSettings();
+  if (settings.recurringReminderEnabled !== 'true') return { cancelled: true };
+
+  const hour = parseInt(settings.recurringReminderTime);
+  const trigger = ScriptApp.newTrigger('recurringReminderTrigger')
+    .timeBased().everyDays(1).atHour(isNaN(hour) ? 9 : hour).nearMinute(0).create();
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('RECURRING_REMINDER_TRIGGER_ID', trigger.getUniqueId());
+  try {
+    props.setProperty('OWNER_EMAIL', settings.recurringReminderEmail ||
+      props.getProperty('OWNER_EMAIL') || Session.getActiveUser().getEmail());
+  } catch (e) { }
+
+  Logger.log('✓ Recurring reminder trigger set: daily at ' + hour + ':00 (id: ' + trigger.getUniqueId() + ')');
+  return { success: true, hour, triggerId: trigger.getUniqueId() };
+}
+
+function cancelRecurringReminder() {
+  const props = PropertiesService.getScriptProperties();
+  const storedId = props.getProperty('RECURRING_REMINDER_TRIGGER_ID');
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'recurringReminderTrigger') {
+      if (!storedId || t.getUniqueId() === storedId) ScriptApp.deleteTrigger(t);
+    }
+  });
+  props.deleteProperty('RECURRING_REMINDER_TRIGGER_ID');
+}
+
+// Save reminder settings and reschedule the trigger.
+function saveSettingsWithReminder(reminderSettings) {
+  const result = saveSettings(reminderSettings);
+  if (!result.success) return result;
+  try { scheduleRecurringReminder(); } catch (e) {
+    Logger.log('scheduleRecurringReminder error: ' + e.message);
+    return { success: false, message: e.message };
+  }
+  return result;
+}
+
+// Send a reminder immediately, even if nothing is due — Settings "Send Test".
+// toEmail lets the test go to the address currently typed in the form, before
+// the settings have been saved.
+function sendTestRecurringReminder(toEmail) {
+  return sendRecurringReminders({ force: true, toEmail: toEmail || '' });
+}
+
+// ── Reminder email actions (doGet) ────────────────────────────
+// Reached only by an authenticated owner (doGet rejects everyone else) AND with
+// a valid signature, so a link that leaks out of the inbox is inert.
+function _handleSIEmailAction(action, params) {
+  const id = String(params.id || '');
+  const occurrence = String(params.d || '');
+  const token = String(params.t || '');
+  const expenseId = String(params.x || '');
+
+  if (action === 'undoSI') {
+    if (token !== _siActionToken('undo|' + id + '|' + occurrence + '|' + expenseId)) {
+      return _siActionPage('error', 'Link expired', 'This undo link is no longer valid.', '');
+    }
+    const undone = undoStandingLog(id, occurrence, expenseId);
+    return undone.success
+      ? _siActionPage('info', 'Undone', 'The expense was removed and the item is due again.', '')
+      : _siActionPage('error', 'Could not undo', undone.message || 'Please remove it from the Expenses page.', '');
+  }
+
+  if (token !== _siActionToken(id + '|' + occurrence)) {
+    return _siActionPage('error', 'Link expired', 'This log link is no longer valid. Open Spendwise to log it manually.', '');
+  }
+
+  const result = logStandingInstruction(id, occurrence);
+
+  if (result.alreadyLogged) {
+    return _siActionPage('info', 'Already logged', result.message, '');
+  }
+  if (!result.success) {
+    return _siActionPage('error', 'Could not log it', result.message || 'Something went wrong.', '');
+  }
+
+  const settings = getSettings();
+  const amount = (settings.currency || '₹') +
+    parseFloat(result.amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const dateNote = result.expenseDate === result.occurrenceDate
+    ? 'Dated ' + result.expenseDate
+    : 'Dated ' + result.expenseDate + ' (due ' + result.occurrenceDate + ')';
+
+  // result.id is the new expense's ID — needed so Undo can delete it
+  const undoUrl = _siActionUrl('undoSI', {
+    id: id, d: occurrence, x: result.id,
+    t: _siActionToken('undo|' + id + '|' + occurrence + '|' + result.id)
+  });
+
+  return _siActionPage('success', 'Logged', result.name + ' · ' + amount + '<br>' + dateNote, undoUrl);
+}
+
+function _siActionPage(kind, title, detail, undoUrl) {
+  const accent = kind === 'success' ? '#6fcf97' : kind === 'error' ? '#eb5757' : '#4f8ef7';
+  const mark = kind === 'success' ? '&#10003;' : kind === 'error' ? '&#33;' : '&#8505;';
+  const appUrl = _getWebAppUrl();
+
+  return HtmlService.createHtmlOutput(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Spendwise</title>
+</head>
+<body style="margin:0;background:#0a0d14;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#e8ecf0;">
+  <div style="max-width:420px;margin:0 auto;padding:64px 20px;text-align:center;">
+    <div style="font-size:18px;font-weight:800;letter-spacing:-0.02em;margin-bottom:32px;">Spendwise</div>
+    <div style="width:56px;height:56px;line-height:56px;border-radius:50%;margin:0 auto 18px;background:${accent}22;color:${accent};font-size:26px;font-weight:700;">${mark}</div>
+    <h1 style="font-size:22px;font-weight:700;margin:0 0 10px;">${title}</h1>
+    <p style="font-size:14px;color:#8892a4;line-height:1.6;margin:0 0 28px;">${detail}</p>
+    ${undoUrl ? `<a href="${undoUrl}" style="display:inline-block;font-size:13px;color:#8892a4;text-decoration:underline;margin-bottom:20px;">Undo this</a><br>` : ''}
+    ${appUrl ? `<a href="${appUrl}?page=standing" style="display:inline-block;margin-top:8px;background:#4f8ef7;color:#0a0d14;font-size:13px;font-weight:700;text-decoration:none;padding:11px 22px;border-radius:10px;">Open Spendwise</a>` : ''}
+  </div>
+</body>
+</html>`)
+    .setTitle('Spendwise')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 // ============================================================
@@ -2190,6 +2819,22 @@ function getSystemStatus() {
     lines.push({ type: 'info', text: 'Weekly email report: not enabled' });
   }
 
+  // Recurring reminder
+  const hasReminder = triggers.some(t => t.getHandlerFunction() === 'recurringReminderTrigger');
+  if (rptSettings.recurringReminderEnabled === 'true') {
+    lines.push({
+      type: hasReminder ? 'ok' : 'warn',
+      text: 'Recurring reminder: ' + (hasReminder
+        ? 'active (' + (rptSettings.recurringReminderDaysBefore || '1') + 'd before, ' + (rptSettings.recurringReminderTime || '9') + ':00)'
+        : 'ENABLED but no trigger — re-save reminder settings')
+    });
+    if (!_getWebAppUrl()) {
+      lines.push({ type: 'warn', text: 'Reminder Log buttons inactive — deploy as a web app, then open Spendwise once' });
+    }
+  } else {
+    lines.push({ type: 'info', text: 'Recurring reminder: not enabled' });
+  }
+
   // Email ingestion
   const hasEmailIngestion = triggers.some(t => t.getHandlerFunction() === 'processEmailReceipts');
   if (rptSettings.emailIngestionEnabled === 'true') {
@@ -2323,6 +2968,21 @@ function runRepair() {
         lines.push({ type: 'ok', text: 'Daily SI auto-log trigger: present' });
       }
     } catch (e) { lines.push({ type: 'warn', text: 'SI trigger check: ' + e.message }); }
+
+    try {
+      const settings = getSettings();
+      const hasReminder = ScriptApp.getProjectTriggers()
+        .some(t => t.getHandlerFunction() === 'recurringReminderTrigger');
+      if (settings.recurringReminderEnabled === 'true' && !hasReminder) {
+        scheduleRecurringReminder();
+        lines.push({ type: 'ok', text: 'Recurring reminder trigger reinstalled' });
+      } else {
+        lines.push({
+          type: 'ok',
+          text: 'Recurring reminder trigger: ' + (hasReminder ? 'present' : 'not enabled')
+        });
+      }
+    } catch (e) { lines.push({ type: 'warn', text: 'Reminder trigger check: ' + e.message }); }
 
     lines.push({ type: 'info', text: 'No data was modified or deleted.' });
     lines.push({ type: 'info', text: 'Run STATUS to verify everything looks healthy.' });

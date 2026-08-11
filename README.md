@@ -41,7 +41,9 @@ It's free, private, and yours to keep.
 
 ![Analytics](https://raw.githubusercontent.com/nayanmehta03/spendwise-gas/main/screenshots/analytics.png)
 
-**Standing instructions** — Add recurring expenses (rent, subscriptions, EMIs) and have them logged automatically on their due date.
+**Standing instructions** — Add recurring expenses (rent, subscriptions, EMIs) and have them logged automatically on their due date. Every due date is tracked individually, so weekly and custom-interval items are logged every time they come round, and a run the trigger misses is caught up on the next one.
+
+**Recurring reminders** — Get an email a day before anything recurring is due, with a **Log it** button that records the expense in one tap. Auto-debit items ride along as a heads-up, and anything still unlogged from the last 30 days is listed too. Configure it under Settings → Recurring Reminders.
 
 **Weekly email report** — Get a summary of your week's spending delivered to your inbox. Shows top categories, budget alerts, income, and comparison to last week.
 
@@ -111,6 +113,8 @@ Create the following files in your Apps Script project and paste the contents fr
    - Execute as: **Me**
    - Who has access: **Only myself** (Recommended for privacy).
 4. Click **Deploy** and copy the **Web App URL**. Open it to access Spendwise!
+
+> Opening the app at least once after deploying also activates the **Log it** buttons in recurring reminder emails — that first visit is how Spendwise learns its own deployment URL. If you ever redeploy to a new URL, delete the `WEBAPP_URL` script property and open the app again. `STATUS` warns you if the buttons aren't active yet.
 
 ---
 

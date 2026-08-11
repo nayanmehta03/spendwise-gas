@@ -110,7 +110,7 @@
           </div>
         </div>
       </div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <div id="reportButtonRow" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-primary btn-sm" id="saveReportBtn">Save Report Settings</button>
         <button class="btn-outline btn-sm" id="testReportBtn">Send Test Email</button>
       </div>
@@ -122,6 +122,11 @@
           Spendwise needs permission to send emails on your behalf.
           This is a one-time step done from the Apps Script editor.
         </p>
+        <p id="mailPermErrorMsg" style="font-size:12px;color:var(--accent1,#ff6b6b);background:rgba(255,107,107,0.1);padding:8px 12px;border-radius:4px;margin-bottom:10px;display:none;font-family:monospace;"></p>
+        <p id="mailPermAccount" style="font-size:12px;color:var(--text2);margin-bottom:10px;display:none;">
+          The web app always runs as <strong id="mailPermAccountEmail" style="color:var(--accent3);"></strong> —
+          you must click Allow while logged into <strong>that</strong> account in the editor, even if you're viewing this page as someone else.
+        </p>
         <ol id="mailPermSteps" style="font-size:12px;color:var(--text2);margin:0 0 12px 16px;line-height:2;"></ol>
         <a id="mailPermEditorLink" href="https://script.google.com/home" target="_blank"
           style="display:inline-block;padding:7px 14px;background:var(--accent3);color:#1a1000;border-radius:var(--radius-sm);font-size:12px;font-weight:700;text-decoration:none;">
@@ -130,6 +135,64 @@
         <span style="font-size:11px;color:var(--text3);display:block;margin-top:8px;">
           After granting permission, return here and click Save or Send Test again.
         </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECURRING REMINDERS -->
+  <div class="settings-section">
+    <div class="settings-section-title collapsible" data-toggle>
+      <span>Recurring Reminders</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+    <div class="settings-section-body" style="display:none;">
+      <div class="card" style="padding:0;">
+        <div class="settings-row" style="padding:12px 16px;">
+          <span class="settings-row-label">Enable Reminder Email</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setReminderEnabled" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+        <div id="reminderOptions">
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Send To</span>
+            <input type="email" id="setReminderEmail" class="form-input sm" placeholder="your@email.com"
+              style="width:200px;" />
+          </div>
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Remind Me</span>
+            <select id="setReminderDays" class="form-input sm" style="width:auto;">
+              <option value="1">1 day before</option>
+              <option value="2">2 days before</option>
+              <option value="3">3 days before</option>
+              <option value="0">On the due date</option>
+            </select>
+          </div>
+          <div class="settings-row" style="padding:12px 16px;">
+            <span class="settings-row-label">Send At</span>
+            <select id="setReminderTime" class="form-input sm" style="width:auto;">
+              <option value="7">7:00 AM</option>
+              <option value="9">9:00 AM</option>
+              <option value="12">12:00 PM</option>
+              <option value="18">6:00 PM</option>
+              <option value="20">8:00 PM</option>
+            </select>
+          </div>
+          <div class="settings-row"
+            style="padding:10px 16px;background:var(--bg2);border-radius:0 0 var(--radius-sm) var(--radius-sm);">
+            <p style="font-size:12px;color:var(--text3);margin:0;">Emails you before each recurring item is due, with a
+              one-tap Log button. Auto-debit items are listed as a heads-up, and anything still unlogged from the last 30
+              days rides along. No email is sent on days with nothing due.</p>
+          </div>
+        </div>
+      </div>
+      <div id="reminderButtonRow" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-primary btn-sm" id="saveReminderBtn">Save Reminder Settings</button>
+        <button class="btn-outline btn-sm" id="testReminderBtn">Send Test Email</button>
       </div>
     </div>
   </div>
@@ -559,7 +622,7 @@
     document.getElementById('setReportEnabled').addEventListener('change', function () {
       document.getElementById('reportOptions').style.opacity = this.checked ? '1' : '0.4';
       document.getElementById('mailPermBanner').classList.add('hidden');
-      if (this.checked) _checkMailPerm(false);
+      if (this.checked) _checkMailPerm(false, 'reportButtonRow');
     });
 
     // Save report settings
@@ -578,13 +641,13 @@
           .withSuccessHandler(function (r) {
             if (!r.granted) {
               btn.disabled = false; btn.textContent = 'Save Report Settings';
-              _showMailPermBanner(r.instructions);
-              showToast('Grant Gmail permission first', 'error');
+              _showMailPermBanner(r.instructions, r.editorUrl, 'reportButtonRow', r.email, r.message);
+              showToast('Permission issue: ' + (r.message || 'Grant Gmail permission first'), 'error');
               return;
             }
             _doSaveReport(settings, btn);
           })
-          .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Save Report Settings'; })
+          .withFailureHandler(function (err) { btn.disabled = false; btn.textContent = 'Save Report Settings'; showToast('Permission check failed: ' + (err && err.message ? err.message : 'unknown error'), 'error'); })
           .checkMailPermission();
       } else {
         _doSaveReport(settings, btn);
@@ -600,8 +663,8 @@
         .withSuccessHandler(function (r) {
           if (!r.granted) {
             btn.disabled = false; btn.textContent = 'Send Test Email';
-            _showMailPermBanner(r.instructions);
-            showToast('Grant Gmail permission first', 'error');
+            _showMailPermBanner(r.instructions, r.editorUrl, 'reportButtonRow', r.email, r.message);
+            showToast('Permission issue: ' + (r.message || 'Grant Gmail permission first'), 'error');
             return;
           }
           btn.textContent = 'Sending...';
@@ -613,7 +676,72 @@
             .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Send Test Email'; showToast('Send failed', 'error'); })
             .sendTestReport();
         })
-        .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Send Test Email'; })
+        .withFailureHandler(function (err) { btn.disabled = false; btn.textContent = 'Send Test Email'; showToast('Permission check failed: ' + (err && err.message ? err.message : 'unknown error'), 'error'); })
+        .checkMailPermission();
+    });
+
+    // Reminder toggle opacity
+    document.getElementById('setReminderEnabled').addEventListener('change', function () {
+      document.getElementById('reminderOptions').style.opacity = this.checked ? '1' : '0.4';
+      document.getElementById('mailPermBanner').classList.add('hidden');
+      if (this.checked) _checkMailPerm(false, 'reminderButtonRow');
+    });
+
+    // Save reminder settings
+    document.getElementById('saveReminderBtn').addEventListener('click', function () {
+      var settings = {
+        recurringReminderEnabled: document.getElementById('setReminderEnabled').checked ? 'true' : 'false',
+        recurringReminderEmail: document.getElementById('setReminderEmail').value.trim(),
+        recurringReminderDaysBefore: document.getElementById('setReminderDays').value,
+        recurringReminderTime: document.getElementById('setReminderTime').value
+      };
+      if (settings.recurringReminderEnabled === 'true' && !settings.recurringReminderEmail) {
+        return showToast('Enter an email address', 'error');
+      }
+      var btn = this;
+      if (settings.recurringReminderEnabled !== 'true') return _doSaveReminder(settings, btn);
+
+      btn.disabled = true; btn.textContent = 'Checking permission...';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (!r.granted) {
+            btn.disabled = false; btn.textContent = 'Save Reminder Settings';
+            _showMailPermBanner(r.instructions, r.editorUrl, 'reminderButtonRow', r.email, r.message);
+            showToast('Permission issue: ' + (r.message || 'Grant Gmail permission first'), 'error');
+            return;
+          }
+          _doSaveReminder(settings, btn);
+        })
+        .withFailureHandler(function (err) { btn.disabled = false; btn.textContent = 'Save Reminder Settings'; showToast('Permission check failed: ' + (err && err.message ? err.message : 'unknown error'), 'error'); })
+        .checkMailPermission();
+    });
+
+    // Send test reminder — sends even when nothing is due.
+    // Checks Gmail permission first, same as the weekly report test button —
+    // without this, an ungranted-permission failure just surfaced as a raw
+    // "Failed: Exception: ..." toast with no path to the authorization dialog.
+    document.getElementById('testReminderBtn').addEventListener('click', function () {
+      var email = document.getElementById('setReminderEmail').value.trim();
+      if (!email) return showToast('Enter an email address first', 'error');
+      var btn = this; btn.disabled = true; btn.textContent = 'Checking...';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (!r.granted) {
+            btn.disabled = false; btn.textContent = 'Send Test Email';
+            _showMailPermBanner(r.instructions, r.editorUrl, 'reminderButtonRow', r.email, r.message);
+            showToast('Permission issue: ' + (r.message || 'Grant Gmail permission first'), 'error');
+            return;
+          }
+          btn.textContent = 'Sending...';
+          google.script.run
+            .withSuccessHandler(function (r2) {
+              btn.disabled = false; btn.textContent = 'Send Test Email';
+              showToast(r2.success ? 'Test reminder sent!' : ('Failed: ' + (r2.message || '')), r2.success ? 'success' : 'error');
+            })
+            .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Send Test Email'; showToast('Send failed', 'error'); })
+            .sendTestRecurringReminder(email);
+        })
+        .withFailureHandler(function (err) { btn.disabled = false; btn.textContent = 'Send Test Email'; showToast('Permission check failed: ' + (err && err.message ? err.message : 'unknown error'), 'error'); })
         .checkMailPermission();
     });
 
@@ -668,6 +796,7 @@
         _renderCatEditor(data.categories || []);
         _renderGeneralSettings(data.settings || {});
         _renderReportSettings(data.settings || {});
+        _renderReminderSettings(data.settings || {});
         _renderShardInfo(data.shardInfo || {});
         _renderEmailSettings(data.settings || {});
         _loadEmailSources();
@@ -734,7 +863,29 @@
     document.getElementById('setReportDay').value = settings.weeklyReportDay || 'Monday';
     document.getElementById('setReportTime').value = settings.weeklyReportTime || '8';
     document.getElementById('reportOptions').style.opacity = enabled ? '1' : '0.4';
-    if (enabled) _checkMailPerm(false);
+    if (enabled) _checkMailPerm(false, 'reportButtonRow');
+  }
+
+  // ── Recurring reminder settings ───────────────────────────────
+  function _renderReminderSettings(settings) {
+    var enabled = settings.recurringReminderEnabled === 'true';
+    document.getElementById('setReminderEnabled').checked = enabled;
+    document.getElementById('setReminderEmail').value =
+      settings.recurringReminderEmail || settings.weeklyReportEmail || '';
+    document.getElementById('setReminderDays').value = settings.recurringReminderDaysBefore || '1';
+    document.getElementById('setReminderTime').value = settings.recurringReminderTime || '9';
+    document.getElementById('reminderOptions').style.opacity = enabled ? '1' : '0.4';
+  }
+
+  function _doSaveReminder(settings, btn) {
+    btn.disabled = true; btn.textContent = 'Saving...';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false; btn.textContent = 'Save Reminder Settings';
+        showToast(r.success ? 'Reminder settings saved!' : ('Save failed' + (r.message ? ': ' + r.message : '')), r.success ? 'success' : 'error');
+      })
+      .withFailureHandler(function () { btn.disabled = false; btn.textContent = 'Save Reminder Settings'; showToast('Save failed', 'error'); })
+      .saveSettingsWithReminder(settings);
   }
 
   function _doSaveReport(settings, btn) {
@@ -748,25 +899,77 @@
       .saveSettingsWithReport(settings);
   }
 
-  function _checkMailPerm(showOkToast) {
+  // rowId is which button row asked ('reportButtonRow' or 'reminderButtonRow') —
+  // needed so the single shared banner relocates to whichever section the user
+  // is actually in, instead of always surfacing under Weekly Report.
+  function _checkMailPerm(showOkToast, rowId) {
     google.script.run
       .withSuccessHandler(function (r) {
         if (r.granted) {
           document.getElementById('mailPermBanner').classList.add('hidden');
           if (showOkToast) showToast('Gmail permission granted', 'success');
         } else {
-          _showMailPermBanner(r.instructions);
+          _showMailPermBanner(r.instructions, r.editorUrl, rowId, r.email, r.message);
         }
       })
-      .withFailureHandler(function () { })
+      .withFailureHandler(function (err) {
+        // Previously silent — a real server-side exception here (as opposed
+        // to a normal "not granted yet" response) looked identical to
+        // clicking Save and nothing happening at all.
+        console.error('checkMailPermission failed:', err);
+        showToast('Could not check Gmail permission: ' + (err && err.message ? err.message : 'unknown error'), 'error');
+      })
       .checkMailPermission();
   }
 
-  function _showMailPermBanner(instructions) {
+  function _showMailPermBanner(instructions, editorUrl, rowId, executingAsEmail, message) {
     var banner = document.getElementById('mailPermBanner');
     var steps = document.getElementById('mailPermSteps');
     steps.innerHTML = (instructions || []).map(function (s) { return '<li>' + s + '</li>'; }).join('');
+    // Deep-links to this exact script project when the server can provide it
+    // (it can compute its own script ID); falls back to the project list.
+    document.getElementById('mailPermEditorLink').href = editorUrl || 'https://script.google.com/home';
+
+    var errEl = document.getElementById('mailPermErrorMsg');
+    if (errEl) {
+      if (message) {
+        errEl.textContent = 'Server response error: ' + message;
+        errEl.style.display = '';
+      } else {
+        errEl.style.display = 'none';
+      }
+    }
+
+    // The web app always executes as whoever deployed it (USER_DEPLOYING),
+    // never as whoever's currently viewing it. Authorizing from the editor
+    // while logged into a different Google account grants THAT account
+    // permission and leaves the deployed app stuck forever — showing exactly
+    // which account is required is the single highest-value thing this
+    // banner can say.
+    var acctP = document.getElementById('mailPermAccount');
+    if (executingAsEmail) {
+      document.getElementById('mailPermAccountEmail').textContent = executingAsEmail;
+      acctP.style.display = '';
+    } else {
+      acctP.style.display = 'none';
+    }
+
+    // There's only one banner in the DOM — Gmail permission is one grant that
+    // covers both Weekly Report and Recurring Reminders, so it doesn't need
+    // two copies. But it used to live permanently under Weekly Report, so
+    // triggering it from Reminders (e.g. the Enable toggle) auto-expanded and
+    // scrolled you into the wrong card entirely. Move it next to whichever
+    // row actually asked.
+    var row = rowId && document.getElementById(rowId);
+    if (row) row.insertAdjacentElement('afterend', banner);
+
     banner.classList.remove('hidden');
+    // Expand the section first, or scrollIntoView lands on something still display:none
+    var body = banner.closest('.settings-section-body');
+    if (body && body.style.display === 'none') {
+      body.style.display = '';
+      if (body.previousElementSibling) body.previousElementSibling.classList.add('open');
+    }
     banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 

@@ -22,6 +22,11 @@
     --topbar-h: 56px;
     --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
     --transition: all 0.2s ease;
+    /* Left edge of the content column. Overlays (toast, modal) anchor to this
+       so they share one centre; the desktop sidebar raises it to its own width.
+       Must live here and not in the 1024px block — --sidebar-w does not exist
+       below that breakpoint. */
+    --content-offset: 0px;
   }
 
   /* Remove number spinner arrows globally — all number inputs across the app */
@@ -1099,23 +1104,6 @@
     }
   }
 
-  .analytics-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  @media (min-width: 600px) {
-    .analytics-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .analytics-grid .full-width {
-      grid-column: 1 / -1;
-    }
-  }
-
   /* Donut + side legend layout */
   .donut-with-legend {
     display: flex;
@@ -1493,7 +1481,7 @@
   .toast {
     position: fixed;
     bottom: 84px;
-    left: 50%;
+    left: calc(50% + var(--content-offset) / 2);
     transform: translateX(-50%);
     background: var(--card);
     border: 1px solid var(--border);
@@ -1534,6 +1522,9 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
+    /* After inset so it wins: keeps the backdrop off the sidebar and puts the
+       modal on the same centre as the toast */
+    left: var(--content-offset);
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     display: flex;
@@ -1764,11 +1755,13 @@
 
     body {
       padding-left: var(--sidebar-w);
+      --content-offset: var(--sidebar-w);
       transition: padding-left 0.2s ease;
     }
 
     body.sidebar-collapsed {
       padding-left: var(--sidebar-w-collapsed);
+      --content-offset: var(--sidebar-w-collapsed);
     }
 
     /* ── Rail ───────────────────────────────────────────────── */
@@ -1893,8 +1886,15 @@
     .sidebar-item.active {
       background: var(--bg3);
       background: color-mix(in srgb, var(--item, var(--accent)) 12%, transparent);
+      border-color: var(--border);
       border-color: color-mix(in srgb, var(--item, var(--accent)) 32%, transparent);
       color: var(--item, var(--accent));
+    }
+
+    /* .active follows :hover at equal specificity, so without this the current
+       page is the one item that gives no hover feedback */
+    .sidebar-item.active:hover {
+      background: color-mix(in srgb, var(--item, var(--accent)) 20%, transparent);
     }
 
     .sidebar-icon {
@@ -1916,6 +1916,7 @@
     }
 
     .sidebar-item.active .sidebar-icon {
+      background: var(--bg3);
       background: color-mix(in srgb, var(--item, var(--accent)) 18%, transparent);
       color: var(--item, var(--accent));
     }
@@ -2012,32 +2013,34 @@
       padding: 26px 28px 96px;
     }
 
-    /* Forms stay readable instead of stretching to the window */
+    /* Forms stay readable instead of stretching to the window — centred, or the
+       cap just parks them hard-left under a full-width page header */
     .form-card {
       max-width: 880px;
+      margin-inline: auto;
+    }
+
+    /* Settings caps the whole section, not the card inside it, so the
+       collapsible title stays aligned with the body it opens */
+    .settings-section {
+      max-width: 880px;
+      margin-inline: auto;
     }
 
     .budget-grid {
       grid-template-columns: repeat(4, 1fr);
     }
 
-    /* auto-fit, not a fixed count: the dashboard shows five stat cards and
-       analytics four, and both should fill the row rather than leave a hole */
-    .stats-row {
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    }
-
     .chart-box {
       height: 300px;
     }
+  }
 
-    /* Centre the toast over the content area, not the whole window */
-    .toast {
-      left: calc(50% + var(--sidebar-w) / 2);
-    }
-
-    body.sidebar-collapsed .toast {
-      left: calc(50% + var(--sidebar-w-collapsed) / 2);
+  /* Five stat cards only fit once each track clears ~170px; below this the
+     dashboard keeps the four-up row and wraps the fifth */
+  @media (min-width: 1200px) {
+    .stats-row-5 {
+      grid-template-columns: repeat(5, 1fr);
     }
   }
 

@@ -192,6 +192,36 @@ Go to your Settings sheet (or set `dailySummaryEnabled` to `true` and configure 
 
 ---
 
+## Developing
+
+If you'd rather edit locally than paste into the Apps Script editor, the project pushes with [clasp](https://github.com/google/clasp).
+
+```bash
+npm install -g @google/clasp
+clasp login
+clasp clone-script <your-scriptId>     # writes .clasp.json (gitignored)
+```
+
+Then set up your deployment target once — copy `deploy.config.example.json` to `deploy.config.json` and paste in your own deployment ID (the `AKfyc…` part of your web app URL, found under **Deploy → Manage deployments**). That file is gitignored, so your IDs never end up in a commit.
+
+```powershell
+.\deploy.ps1                                # push, version, redeploy
+.\deploy.ps1 -DryRun                        # show what would be pushed
+.\deploy.ps1 -Description "analytics fix"   # label the version
+```
+
+`deploy.ps1` always redeploys to the deployment ID you configured, so the live URL never changes — bookmarks, the Google Chat connection, and the **Log it** buttons in reminder emails keep working. Plain `clasp deploy` creates a *new* deployment with a *new* URL instead, so avoid it. From Git Bash, `./deploy.sh` forwards to the same script.
+
+A few things worth knowing before you change files:
+
+- **`.claspignore` is a whitelist.** It ignores everything, then re-includes each shipped file by name. A new `.js` or `.html` file won't deploy until you add a `!filename` line — `deploy.ps1` warns you when it spots one.
+- **No build step and no modules.** Every `.js` file shares one global namespace server-side, so `import`/`require` don't exist and a duplicate function name across two files breaks the whole project.
+- **Adding an OAuth scope** means editing `appsscript.json` *and* re-authorizing the app — it fails silently otherwise.
+
+Contributor conventions live in `CLAUDE.md`.
+
+---
+
 ## License
 
 MIT — use it however you want.

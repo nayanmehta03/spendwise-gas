@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy this file to deploy.config.json (gitignored) and fill in your own values. deploy.ps1 reads it to know which existing deployment to redeploy to, so the live /exec URL never changes.",
+  "_deploymentId": "The AKfyc... segment of your web app URL: https://script.google.com/macros/s/<deploymentId>/exec. Find it in the Apps Script editor under Deploy > Manage deployments.",
+  "_webAppUrl": "Optional. Only used for the success message and -Open. Derived from deploymentId when omitted.",
+
+  "deploymentId": "AKfyc__REPLACE_WITH_YOUR_DEPLOYMENT_ID__",
+  "webAppUrl": ""
+}

@@ -1,6 +1,43 @@
+# =============================================================================
+# spendwise-gas is a PUBLIC repository.
+# Everything not ignored here is world-readable forever, including in history.
+# The rule: public = what a stranger needs to run their own copy.
+#           internal = anything tied to *this* Google account or still in flux.
+# =============================================================================
+
+# --- Secrets & account-bound identifiers -------------------------------------
+# .clasp.json holds the private scriptId; .clasprc.json holds OAuth tokens.
 .clasp.json
+.clasprc.json
+deploy.config.json
+.env
+.env.*
+*.key
+*.pem
+credentials*.json
+client_secret*.json
+
+# --- Internal docs (public docs live in README.md) ---------------------------
+# Convention: docs/ is the internal workspace - briefs, specs, research, plans.
+# Nothing in it is published. Promote content to README.md when it is meant
+# for users.
 docs/*
+DESIGN_SPEC.md
+
+# --- Local tooling & agent state ---------------------------------------------
+.claude/*
 .vscode/*
+.deploy-history.log
+
+# --- Superseded ad-hoc deploy scripts (use deploy.ps1) -----------------------
 redeploy.bat
 redeploy.txt
 redeploy.sh
+
+# --- Build / OS noise ---------------------------------------------------------
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak

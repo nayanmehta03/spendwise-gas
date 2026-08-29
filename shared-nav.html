@@ -151,7 +151,9 @@
       type: 'bar',
       data: { labels, datasets: [{ data, backgroundColor: color || 'rgba(79,142,247,0.7)', borderRadius: 3 }] },
       options: {
-        responsive: true, plugins: { legend: { display: false } },
+        // Height comes from the .chart-box wrapper — a full-width canvas that
+        // keeps its aspect ratio would be as tall as the window is wide.
+        responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: '#5c6478', maxTicksLimit: 10 } },
           y: { grid: { color: '#272d3d' }, ticks: { color: '#5c6478', callback: v => '₹' + v } }

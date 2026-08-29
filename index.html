@@ -18,6 +18,97 @@
 
 <body>
 
+  <!-- DESKTOP SIDEBAR (>= 1024px; hidden below, where the overlay nav takes over) -->
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-brand" onclick="navigateTo('dashboard')" title="Spendwise">
+      <span class="sidebar-logo">₹</span>
+      <span class="sidebar-brand-text">
+        <span class="sidebar-brand-name">Spendwise</span>
+        <span class="sidebar-brand-sub">Expense Tracker</span>
+      </span>
+    </button>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">Record</div>
+
+      <button class="sidebar-item" data-page="add" style="--item:var(--accent);" onclick="navigateTo('add')"
+        title="Add Expense">
+        <span class="sidebar-icon"><i class="ph ph-plus"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Add Expense</span>
+          <span class="sidebar-desc">Log a spend</span>
+        </span>
+      </button>
+
+      <button class="sidebar-item" data-page="income" style="--item:var(--accent2);" onclick="navigateTo('income')"
+        title="Income">
+        <span class="sidebar-icon"><i class="ph ph-arrow-down"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Income</span>
+          <span class="sidebar-desc">Money in</span>
+        </span>
+      </button>
+
+      <button class="sidebar-item" data-page="standing" style="--item:var(--accent4);" onclick="navigateTo('standing')"
+        title="Recurring">
+        <span class="sidebar-icon"><i class="ph ph-arrows-clockwise"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Recurring</span>
+          <span class="sidebar-desc">Standing instructions</span>
+        </span>
+      </button>
+
+      <div class="sidebar-section">Review</div>
+
+      <button class="sidebar-item" data-page="dashboard" style="--item:var(--accent);" onclick="navigateTo('dashboard')"
+        title="Dashboard">
+        <span class="sidebar-icon"><i class="ph ph-squares-four"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Dashboard</span>
+          <span class="sidebar-desc">Budget &amp; overview</span>
+        </span>
+      </button>
+
+      <button class="sidebar-item" data-page="expenses" style="--item:var(--accent3);" onclick="navigateTo('expenses')"
+        title="Expenses">
+        <span class="sidebar-icon"><i class="ph ph-list"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Expenses</span>
+          <span class="sidebar-desc">Browse &amp; filter</span>
+        </span>
+      </button>
+
+      <button class="sidebar-item" data-page="analytics" style="--item:var(--accent4);" onclick="navigateTo('analytics')"
+        title="Analytics">
+        <span class="sidebar-icon"><i class="ph ph-chart-pie-slice"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Analytics</span>
+          <span class="sidebar-desc">Trends &amp; breakdown</span>
+        </span>
+      </button>
+
+      <div class="sidebar-section">Manage</div>
+
+      <button class="sidebar-item" data-page="settings" style="--item:var(--text2);" onclick="navigateTo('settings')"
+        title="Settings">
+        <span class="sidebar-icon"><i class="ph ph-gear"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Settings</span>
+          <span class="sidebar-desc">Categories &amp; budgets</span>
+        </span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-item" id="sidebarToggle" onclick="toggleSidebar()" title="Collapse sidebar">
+        <span class="sidebar-icon"><i class="ph ph-caret-double-left sidebar-collapse-icon"></i></span>
+        <span class="sidebar-text">
+          <span class="sidebar-label">Collapse</span>
+        </span>
+      </button>
+    </div>
+  </aside>
+
   <!-- CENTERED OVERLAY NAV -->
   <div id="navOverlay" class="nav-overlay" onclick="closeNav()">
     <button class="nav-overlay-close" onclick="closeNav()"><i class="ph ph-x"></i></button>
@@ -159,6 +250,9 @@
       document.querySelectorAll('.nav-overlay-item').forEach(el => {
         el.classList.toggle('active', el.getAttribute('onclick').includes("'" + page + "'"));
       });
+      document.querySelectorAll('.sidebar-item[data-page]').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-page') === page);
+      });
 
       // Lazy init: call page init function only on first visit
       if (!_initialized[page]) {
@@ -173,6 +267,27 @@
         history.replaceState({ page }, '', location.href.split('?')[0] + '?page=' + page);
       } catch (e) { }
     }
+
+    // ── Desktop sidebar collapse (persisted) ────────────────────
+    function _applySidebarState(collapsed) {
+      document.body.classList.toggle('sidebar-collapsed', collapsed);
+      const btn = document.getElementById('sidebarToggle');
+      if (btn) {
+        btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        const label = btn.querySelector('.sidebar-label');
+        if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+      }
+    }
+
+    function toggleSidebar() {
+      const collapsed = !document.body.classList.contains('sidebar-collapsed');
+      _applySidebarState(collapsed);
+      try { localStorage.setItem('sw_sidebar_collapsed', String(collapsed)); } catch (e) { }
+    }
+
+    try {
+      _applySidebarState(localStorage.getItem('sw_sidebar_collapsed') === 'true');
+    } catch (e) { }
 
     // Overlay nav: toggle open/close
     function openNav() {

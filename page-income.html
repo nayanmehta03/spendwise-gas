@@ -226,7 +226,7 @@
     const catContainer = document.getElementById('incCatContainer');
     // children, not innerHTML: the placeholder comment in the markup counts as
     // content, so an innerHTML check never let these buttons render.
-    if (catContainer && !catContainer.children.length) {
+    if (catContainer) {
       catContainer.innerHTML = Object.entries(_INC_CAT_ICONS).map(function ([name, icon]) {
         return '<button type="button" class="inc-cat-btn" data-cat="' + name + '" onclick="_selectIncCat(\'' + name + '\')">'
           + _phIcon(icon) + ' ' + name + '</button>';

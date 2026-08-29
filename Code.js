@@ -1,5 +1,5 @@
 // ============================================================
-// SPENDWISE — Code.gs  v1.2.0
+// SPENDWISE — Code.gs  v1.3.0
 // Runtime backend only. All setup/admin logic lives in AdminOps.gs.
 //
 // FILE MAP:
@@ -22,7 +22,7 @@
 // Script Properties. No IDs are hardcoded anywhere in this file.
 // ============================================================
 
-const SPENDWISE_VERSION = '1.2.0';
+const SPENDWISE_VERSION = '1.3.0';
 
 const SHEET_NAME = 'Expenses';
 const CATEGORIES_TAB = 'Categories';
@@ -141,6 +141,10 @@ function doGet(e) {
   const validPages = ['add', 'dashboard', 'expenses', 'analytics', 'settings', 'income', 'standing'];
   const tmpl = HtmlService.createTemplateFromFile('index');
   tmpl.initPage = validPages.includes(page) ? page : 'add';
+  // Rendered straight onto <body> so a collapsed sidebar paints collapsed.
+  // Reading it client-side instead would flash expanded for one frame.
+  tmpl.sidebarCollapsed = PropertiesService.getScriptProperties()
+    .getProperty('SIDEBAR_COLLAPSED') === 'true';
   return tmpl.evaluate()
     .setTitle('Spendwise')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -179,6 +183,15 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ text: '❌ Error: ' + err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ── Desktop sidebar preference ───────────────────────────────
+// Called fire-and-forget from the client; doGet reads it back. Script
+// properties, not user properties: the web app is access:MYSELF, so there is
+// exactly one user, and every other property in this project lives there.
+function setSidebarCollapsed(collapsed) {
+  PropertiesService.getScriptProperties()
+    .setProperty('SIDEBAR_COLLAPSED', collapsed ? 'true' : 'false');
 }
 
 function include(filename) {

@@ -12,11 +12,11 @@
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600&display=swap"
     rel="stylesheet" />
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.2"></script>
   <?!= include('shared-styles'); ?>
 </head>
 
-<body>
+<body class="<?= sidebarCollapsed ? 'sidebar-collapsed' : '' ?>">
 
   <!-- DESKTOP SIDEBAR (>= 1024px; hidden below, where the overlay nav takes over) -->
   <aside class="sidebar" id="sidebar">
@@ -28,76 +28,8 @@
       </span>
     </button>
 
-    <nav class="sidebar-nav">
-      <div class="sidebar-section">Record</div>
-
-      <button class="sidebar-item" data-page="add" style="--item:var(--accent);" onclick="navigateTo('add')"
-        title="Add Expense">
-        <span class="sidebar-icon"><i class="ph ph-plus"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Add Expense</span>
-          <span class="sidebar-desc">Log a spend</span>
-        </span>
-      </button>
-
-      <button class="sidebar-item" data-page="income" style="--item:var(--accent2);" onclick="navigateTo('income')"
-        title="Income">
-        <span class="sidebar-icon"><i class="ph ph-arrow-down"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Income</span>
-          <span class="sidebar-desc">Money in</span>
-        </span>
-      </button>
-
-      <button class="sidebar-item" data-page="standing" style="--item:var(--accent4);" onclick="navigateTo('standing')"
-        title="Recurring">
-        <span class="sidebar-icon"><i class="ph ph-arrows-clockwise"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Recurring</span>
-          <span class="sidebar-desc">Standing instructions</span>
-        </span>
-      </button>
-
-      <div class="sidebar-section">Review</div>
-
-      <button class="sidebar-item" data-page="dashboard" style="--item:var(--accent);" onclick="navigateTo('dashboard')"
-        title="Dashboard">
-        <span class="sidebar-icon"><i class="ph ph-squares-four"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Dashboard</span>
-          <span class="sidebar-desc">Budget &amp; overview</span>
-        </span>
-      </button>
-
-      <button class="sidebar-item" data-page="expenses" style="--item:var(--accent3);" onclick="navigateTo('expenses')"
-        title="Expenses">
-        <span class="sidebar-icon"><i class="ph ph-list"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Expenses</span>
-          <span class="sidebar-desc">Browse &amp; filter</span>
-        </span>
-      </button>
-
-      <button class="sidebar-item" data-page="analytics" style="--item:var(--accent4);" onclick="navigateTo('analytics')"
-        title="Analytics">
-        <span class="sidebar-icon"><i class="ph ph-chart-pie-slice"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Analytics</span>
-          <span class="sidebar-desc">Trends &amp; breakdown</span>
-        </span>
-      </button>
-
-      <div class="sidebar-section">Manage</div>
-
-      <button class="sidebar-item" data-page="settings" style="--item:var(--text2);" onclick="navigateTo('settings')"
-        title="Settings">
-        <span class="sidebar-icon"><i class="ph ph-gear"></i></span>
-        <span class="sidebar-text">
-          <span class="sidebar-label">Settings</span>
-          <span class="sidebar-desc">Categories &amp; budgets</span>
-        </span>
-      </button>
-    </nav>
+    <!-- Rendered from PAGES at boot by _renderNavs() -->
+    <nav class="sidebar-nav"></nav>
 
     <div class="sidebar-footer">
       <button class="sidebar-item" id="sidebarToggle" onclick="toggleSidebar()" title="Collapse sidebar">
@@ -112,36 +44,8 @@
   <!-- CENTERED OVERLAY NAV -->
   <div id="navOverlay" class="nav-overlay" onclick="closeNav()">
     <button class="nav-overlay-close" onclick="closeNav()"><i class="ph ph-x"></i></button>
-    <nav class="nav-overlay-menu">
-      <button class="nav-overlay-item" onclick="navigateTo('add')">
-        <span class="nav-overlay-icon"><i class="ph ph-plus"></i></span>
-        <span class="nav-overlay-label">Add Expense</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('income')">
-        <span class="nav-overlay-icon"><i class="ph ph-arrow-down"></i></span>
-        <span class="nav-overlay-label">Income</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('standing')">
-        <span class="nav-overlay-icon"><i class="ph ph-arrows-clockwise"></i></span>
-        <span class="nav-overlay-label">Recurring</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('dashboard')">
-        <span class="nav-overlay-icon"><i class="ph ph-squares-four"></i></span>
-        <span class="nav-overlay-label">Dashboard</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('expenses')">
-        <span class="nav-overlay-icon"><i class="ph ph-list"></i></span>
-        <span class="nav-overlay-label">Expenses</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('analytics')">
-        <span class="nav-overlay-icon"><i class="ph ph-chart-pie-slice"></i></span>
-        <span class="nav-overlay-label">Analytics</span>
-      </button>
-      <button class="nav-overlay-item" onclick="navigateTo('settings')">
-        <span class="nav-overlay-icon"><i class="ph ph-gear"></i></span>
-        <span class="nav-overlay-label">Settings</span>
-      </button>
-    </nav>
+    <!-- Rendered from PAGES at boot by _renderNavs() -->
+    <nav class="nav-overlay-menu"></nav>
   </div>
 
   <!-- TOPBAR -->
@@ -198,15 +102,54 @@
     // ============================================================
     // SPA ROUTER
     // ============================================================
+    // Single source of truth for the seven pages. Title, icon, sidebar
+    // description, accent and group all live here and both navs render from it,
+    // so adding a page is one entry rather than three coordinated edits.
     const PAGES = {
-      add: { title: 'Add Expense', init: () => typeof initAdd === 'function' && initAdd() },
-      income: { title: 'Income', init: () => typeof initIncome === 'function' && initIncome() },
-      standing: { title: 'Recurring', init: () => typeof initStanding === 'function' && initStanding() },
-      dashboard: { title: 'Dashboard', init: () => typeof initDashboard === 'function' && initDashboard() },
-      expenses: { title: 'Expenses', init: () => typeof initExpenses === 'function' && initExpenses() },
-      analytics: { title: 'Analytics', init: () => typeof initAnalytics === 'function' && initAnalytics() },
-      settings: { title: 'Settings', init: () => typeof initSettings === 'function' && initSettings() },
+      add:       { title: 'Add Expense', icon: 'ph-plus',             desc: 'Log a spend',           accent: '--accent',  group: 'Record', init: () => typeof initAdd === 'function' && initAdd() },
+      income:    { title: 'Income',      icon: 'ph-arrow-down',       desc: 'Money in',              accent: '--accent2', group: 'Record', init: () => typeof initIncome === 'function' && initIncome() },
+      standing:  { title: 'Recurring',   icon: 'ph-arrows-clockwise', desc: 'Standing instructions', accent: '--accent4', group: 'Record', init: () => typeof initStanding === 'function' && initStanding() },
+      dashboard: { title: 'Dashboard',   icon: 'ph-squares-four',     desc: 'Budget & overview',     accent: '--accent',  group: 'Review', init: () => typeof initDashboard === 'function' && initDashboard() },
+      expenses:  { title: 'Expenses',    icon: 'ph-list',             desc: 'Browse & filter',       accent: '--accent3', group: 'Review', init: () => typeof initExpenses === 'function' && initExpenses() },
+      analytics: { title: 'Analytics',   icon: 'ph-chart-pie-slice',  desc: 'Trends & breakdown',    accent: '--accent4', group: 'Review', init: () => typeof initAnalytics === 'function' && initAnalytics() },
+      settings:  { title: 'Settings',    icon: 'ph-gear',             desc: 'Categories & budgets',  accent: '--text2',   group: 'Manage', init: () => typeof initSettings === 'function' && initSettings() },
     };
+
+    // Paints the desktop rail and the mobile overlay from the same map. Clicks
+    // are delegated, so the two navs also share one active-state mechanism
+    // (data-page) instead of the overlay matching on its onclick string.
+    function _renderNavs() {
+      const rail = document.querySelector('.sidebar-nav');
+      const overlay = document.querySelector('.nav-overlay-menu');
+      let group = null, railHtml = '', overlayHtml = '';
+
+      Object.entries(PAGES).forEach(([key, p]) => {
+        if (p.group !== group) {
+          group = p.group;
+          railHtml += '<div class="sidebar-section">' + group + '</div>';
+        }
+        railHtml +=
+          '<button class="sidebar-item" data-page="' + key + '" style="--item:var(' + p.accent + ');" title="' + p.title + '">'
+          + '<span class="sidebar-icon"><i class="ph ' + p.icon + '"></i></span>'
+          + '<span class="sidebar-text">'
+          + '<span class="sidebar-label">' + p.title + '</span>'
+          + '<span class="sidebar-desc">' + p.desc + '</span>'
+          + '</span></button>';
+        overlayHtml +=
+          '<button class="nav-overlay-item" data-page="' + key + '">'
+          + '<span class="nav-overlay-icon"><i class="ph ' + p.icon + '"></i></span>'
+          + '<span class="nav-overlay-label">' + p.title + '</span>'
+          + '</button>';
+      });
+
+      rail.innerHTML = railHtml;
+      overlay.innerHTML = overlayHtml;
+
+      [rail, overlay].forEach(el => el.addEventListener('click', ev => {
+        const btn = ev.target.closest('[data-page]');
+        if (btn) navigateTo(btn.dataset.page);
+      }));
+    }
 
     const _initialized = {};
     let _currentPage = null;
@@ -246,12 +189,9 @@
         }
       }
 
-      // Mark active nav item
-      document.querySelectorAll('.nav-overlay-item').forEach(el => {
-        el.classList.toggle('active', el.getAttribute('onclick').includes("'" + page + "'"));
-      });
-      document.querySelectorAll('.sidebar-item[data-page]').forEach(el => {
-        el.classList.toggle('active', el.getAttribute('data-page') === page);
+      // Mark active nav item (both navs key off data-page)
+      document.querySelectorAll('.sidebar-item[data-page], .nav-overlay-item[data-page]').forEach(el => {
+        el.classList.toggle('active', el.dataset.page === page);
       });
 
       // Lazy init: call page init function only on first visit
@@ -282,12 +222,14 @@
     function toggleSidebar() {
       const collapsed = !document.body.classList.contains('sidebar-collapsed');
       _applySidebarState(collapsed);
-      try { localStorage.setItem('sw_sidebar_collapsed', String(collapsed)); } catch (e) { }
+      // Fire-and-forget: the preference is cosmetic, so a failed write must
+      // never interrupt the user. doGet renders it back onto <body>.
+      google.script.run.withFailureHandler(function () { }).setSidebarCollapsed(collapsed);
     }
 
-    try {
-      _applySidebarState(localStorage.getItem('sw_sidebar_collapsed') === 'true');
-    } catch (e) { }
+    // The class is already on <body> from the server; this only syncs the
+    // toggle button label and tooltip to match it.
+    _applySidebarState(document.body.classList.contains('sidebar-collapsed'));
 
     // Overlay nav: toggle open/close
     function openNav() {
@@ -309,6 +251,7 @@
     // ── Boot: activate initial page from server ──────────────────
     // initPage is injected server-side via <?= initPage ?> scriptlet
     const _bootPage = '<?= initPage ?>';
+    _renderNavs();
     navigateTo(_bootPage || 'add');
   </script>
 

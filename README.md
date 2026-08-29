@@ -16,7 +16,7 @@ No server. No subscription. No third-party database.
 Your data stays in Google Sheets that you own.
 
 [![Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?style=flat&logo=google&logoColor=white)](https://script.google.com)
-[![Version](https://img.shields.io/badge/version-1.2.0-6FCF97?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.3.0-6FCF97?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -51,6 +51,8 @@ It's free, private, and yours to keep.
 
 **Automated Gmail Receipt Ingestion (New in v1.2.0)** — Automatically scan your Gmail for purchase receipts (e.g. Swiggy, Zomato, Amazon, or custom keywords/senders) and import them. Features duplicate detection, keyword-to-category mapping, and robust execution logs.
 
+**Desktop sidebar (New in v1.3.0)** — On screens 1024px and wider, a left rail lists every page with an icon and a short description, and content fills the width beside it. Collapse it to icons only and it stays that way next visit; narrower screens keep the hamburger menu.
+
 **Full data export** — Download all your expenses as a CSV file any time from Settings.
 
 ---
@@ -58,6 +60,8 @@ It's free, private, and yours to keep.
 ## Upgrading from v1.1.0 (Keeping Data Intact)
 
 Upgrading to v1.2.0 is **fully backwards compatible**. None of your existing expenses, categories, settings, or standing instructions will be touched.
+
+Upgrading to v1.3.0 is **fully backwards compatible** too, and it is a front-end change only — the desktop sidebar. There is no sheet schema change, no new OAuth scope, nothing to re-authorize, and no need to re-run `SETUP()`. Update the HTML files, redeploy, and refresh. The steps below apply only if you are coming from v1.1.0.
 
 ### Step 1: Enable the manifest file
 1. Open your existing Google Apps Script project at [script.google.com](https://script.google.com).

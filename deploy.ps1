@@ -113,6 +113,11 @@ if (-not $DeploymentId -and (Test-Path 'deploy.config.json')) {
 if (-not $DeploymentId) {
   Fail "No deployment id." "Copy deploy.config.example.json to deploy.config.json and fill in deploymentId (it is gitignored), or pass -DeploymentId."
 }
+# The example config's placeholder is all [A-Za-z0-9_-] after 'AKfyc', so it passes
+# the shape check below. Catch it here - before push/create-version mutate anything.
+if ($DeploymentId -match 'REPLACE_WITH') {
+  Fail "deploy.config.json still has the placeholder deployment id." "Open it and paste the AKfyc... segment of your /macros/s/<id>/exec URL."
+}
 if ($DeploymentId -notmatch '^AKfyc[A-Za-z0-9_-]{20,}$') {
   Fail "'$DeploymentId' does not look like a deployment id." "Use the AKfyc... segment of the /macros/s/<id>/exec URL - not the scriptId, not the whole URL."
 }
@@ -201,7 +206,8 @@ foreach ($line in $status) {
 if ($tracked.Count -eq 0) {
   Write-Warn2 "Could not parse the tracked-file list; showing raw output instead."
   $status | ForEach-Object { Write-Note $_ }
-  $tracked = @($status | Where-Object { $_.Trim() })
+  # Strip the tree glyphs here too, so Guard 1 below sees bare filenames either way.
+  $tracked = @($status | Where-Object { $_.Trim() } | ForEach-Object { ($_ -replace '^[^A-Za-z0-9_.]+', '').Trim() })
 }
 else {
   $tracked | ForEach-Object { Write-Note $_ }
@@ -211,8 +217,10 @@ else {
 # Guard 1: files that must never reach the script project.
 #   shard-functions.js re-declares functions that live in AdminOps.js, which is a
 #   project-wide duplicate-declaration error the moment it lands.
+#   Matched by suffix, not -contains: a leftover tree glyph or indent must never
+#   let this guard pass while checking nothing.
 foreach ($leak in @('shard-functions.js', 'README.md', 'DESIGN_SPEC.md', 'CLAUDE.md', 'deploy.ps1', 'deploy.sh', 'deploy.config.json')) {
-  if ($tracked -contains $leak) {
+  if ($tracked | Where-Object { $_ -like "*$leak" }) {
     Fail "'$leak' is in the push set." "Restore the .claspignore whitelist - pushing it breaks the script project."
   }
 }

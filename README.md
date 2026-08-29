@@ -16,7 +16,7 @@ No server. No subscription. No third-party database.
 Your data stays in Google Sheets that you own.
 
 [![Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?style=flat&logo=google&logoColor=white)](https://script.google.com)
-[![Version](https://img.shields.io/badge/version-1.3.0-6FCF97?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.3.1-6FCF97?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -43,7 +43,7 @@ It's free, private, and yours to keep.
 
 **Standing instructions** — Add recurring expenses (rent, subscriptions, EMIs) and have them logged automatically on their due date. Every due date is tracked individually, so weekly and custom-interval items are logged every time they come round, and a run the trigger misses is caught up on the next one.
 
-**Recurring reminders** — Get an email a day before anything recurring is due, with a **Log it** button that records the expense in one tap. Auto-debit items ride along as a heads-up, and anything still unlogged from the last 30 days is listed too. Configure it under Settings → Recurring Reminders.
+**Recurring reminders** — Get an email ahead of anything recurring falling due, with a **Log it** button that records the expense in one tap. The mail covers everything from today out to your lead time, so a skipped run doesn't lose the notice. Auto-debit items ride along as a heads-up with no button — and if one fails to log itself, it gets its own section so you can record it by hand. Anything still unlogged from the last 30 days is listed too. Configure it under Settings → Recurring Reminders.
 
 **Weekly email report** — Get a summary of your week's spending delivered to your inbox. Shows top categories, budget alerts, income, and comparison to last week.
 
@@ -61,7 +61,11 @@ It's free, private, and yours to keep.
 
 Upgrading to v1.2.0 is **fully backwards compatible**. None of your existing expenses, categories, settings, or standing instructions will be touched.
 
-Upgrading to v1.3.0 is **fully backwards compatible** too, and it is a front-end change only — the desktop sidebar. There is no sheet schema change, no new OAuth scope, nothing to re-authorize, and no need to re-run `SETUP()`. Update the HTML files, redeploy, and refresh. The steps below apply only if you are coming from v1.1.0.
+Upgrading to v1.3.0 is **fully backwards compatible** too, and it is a front-end change only — the desktop sidebar. There is no sheet schema change, no new OAuth scope, nothing to re-authorize, and no need to re-run `SETUP()`. Update the HTML files, redeploy, and refresh.
+
+Upgrading to v1.3.1 fixes recurring reminders and needs no schema change or re-authorization either, but **one thing to expect**: auto-log catch-up now looks back 30 days instead of 3, matching the window the reminder email calls "overdue". Previously an auto-debit item missed by more than 3 days could never log itself again, yet kept arriving as overdue with a **Log it** button. On the first `processStandingInstructions` run after upgrading (07:00 daily), any auto-debit occurrence stranded that way will be logged, back-dated to its own due date. Check the Expenses page afterwards if you had stranded items — they are real debits that were never recorded, but they will appear as a batch. Nothing already logged is touched, and nothing older than 30 days or predating the item's last logged date is ever caught up.
+
+The steps below apply only if you are coming from v1.1.0.
 
 ### Step 1: Enable the manifest file
 1. Open your existing Google Apps Script project at [script.google.com](https://script.google.com).

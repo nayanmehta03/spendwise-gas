@@ -1,5 +1,5 @@
 // ============================================================
-// SPENDWISE — Code.gs  v1.3.0
+// SPENDWISE — Code.gs  v1.3.1
 // Runtime backend only. All setup/admin logic lives in AdminOps.gs.
 //
 // FILE MAP:
@@ -22,7 +22,7 @@
 // Script Properties. No IDs are hardcoded anywhere in this file.
 // ============================================================
 
-const SPENDWISE_VERSION = '1.3.0';
+const SPENDWISE_VERSION = '1.3.1';
 
 const SHEET_NAME = 'Expenses';
 const CATEGORIES_TAB = 'Categories';
@@ -89,7 +89,12 @@ const DEFAULT_SETTINGS = {
 // How many days back processStandingInstructions() will look for occurrences
 // it missed (trigger failure, auth lapse). Only occurrences AFTER the SI's
 // LastLoggedDate are caught up, so this can never re-log history.
-const SI_CATCHUP_DAYS = 3;
+//
+// This MUST stay >= the reminder's overdue window (sendRecurringReminders uses
+// the same constant). When catch-up was the shorter of the two, an auto-log
+// occurrence missed by more than the window could never be logged automatically
+// again, yet kept arriving as overdue with a manual "Log it" button.
+const SI_CATCHUP_DAYS = 30;
 
 const _ssCache = {};
 function _openSS(id) {
@@ -472,6 +477,19 @@ function saveSettings(settings) {
   if (touchesDailySummary) {
     try { reconcileDailySummaryTrigger(); }
     catch (e) { Logger.log('reconcileDailySummaryTrigger error: ' + e.message); }
+  }
+
+  // Same reconcile for recurring reminders. Previously only saveSettingsWithReminder
+  // installed this trigger, so a settings change made any other way — edited
+  // directly in the sheet, or restored from a backup — left the trigger stale or
+  // absent while Settings still read "enabled", and reminders silently stopped.
+  const touchesReminder = settings && (
+    Object.prototype.hasOwnProperty.call(settings, 'recurringReminderEnabled') ||
+    Object.prototype.hasOwnProperty.call(settings, 'recurringReminderTime') ||
+    Object.prototype.hasOwnProperty.call(settings, 'recurringReminderDaysBefore'));
+  if (touchesReminder) {
+    try { scheduleRecurringReminder(); }
+    catch (e) { Logger.log('scheduleRecurringReminder error: ' + e.message); }
   }
 
   return { success: true };
@@ -1044,9 +1062,10 @@ const SI_COL_LOGGED_OCCURRENCES = 16;
 const SI_COL_LAST_REMINDED = 17;
 
 // Keeps the LoggedOccurrences cell bounded — a weekly SI would otherwise grow
-// this by 52 dates a year. Older occurrences fall out of the reminder/catch-up
-// window long before this cap is reached.
-const SI_MAX_OCCURRENCE_HISTORY = 30;
+// this by 52 dates a year. Sits above SI_CATCHUP_DAYS so a daily SI's ledger
+// still spans the whole catch-up window; beyond that the LastLoggedDate guard in
+// processStandingInstructions is what stops an aged-out occurrence re-logging.
+const SI_MAX_OCCURRENCE_HISTORY = 40;
 
 function _getSISheet() {
   const ss = getConfigSS();
@@ -2061,33 +2080,51 @@ function sendRecurringReminders(opts) {
     const targetDate = Utilities.formatDate(new Date(now.getTime() + daysBefore * 86400000), tz, 'yyyy-MM-dd');
     const currency = settings.currency || '₹';
 
-    // Upcoming — the occurrences that fall exactly on the target date
-    let upcoming = getSIOccurrences(targetDate, targetDate, { unloggedOnly: true });
+    // Upcoming — everything from today out to the target date, not just the one
+    // day that lands on it. A single exact date gave each occurrence exactly one
+    // chance at a reminder, so a skipped trigger run lost it for good. The
+    // LastRemindedOccurrence guard below still means each one is sent once.
+    let upcoming = getSIOccurrences(today, targetDate, { unloggedOnly: true });
     if (!opts.force) {
       upcoming = upcoming.filter(o => !o.lastRemindedOccurrence || o.lastRemindedOccurrence < o.dueDate);
     }
 
-    // Overdue — anything still unsettled from the last 30 days. Occurrences on
-    // or before LastLoggedDate are excluded so rows that predate the ledger
-    // don't arrive as a wall of false alarms on the first send.
-    const overdueFrom = Utilities.formatDate(new Date(now.getTime() - 30 * 86400000), tz, 'yyyy-MM-dd');
+    // Overdue — anything still unsettled inside the catch-up window. Sharing the
+    // constant is what keeps the two honest: everything shown as overdue is still
+    // something auto-log will retry. Occurrences on or before LastLoggedDate are
+    // excluded so rows that predate the ledger don't arrive as a wall of false
+    // alarms on the first send.
+    const overdueFrom = Utilities.formatDate(new Date(now.getTime() - SI_CATCHUP_DAYS * 86400000), tz, 'yyyy-MM-dd');
     const yesterday = Utilities.formatDate(new Date(now.getTime() - 86400000), tz, 'yyyy-MM-dd');
     const overdue = getSIOccurrences(overdueFrom, yesterday, { unloggedOnly: true })
       .filter(o => !o.lastLoggedDate || o.dueDate > o.lastLoggedDate);
 
     if (!upcoming.length && !overdue.length && !opts.force) {
-      Logger.log('sendRecurringReminders: nothing due on ' + targetDate + ', no email sent');
+      Logger.log('sendRecurringReminders: nothing due ' + today + '..' + targetDate + ', no email sent');
       return { success: true, skipped: true, reason: 'nothing due' };
     }
 
     const manual = upcoming.filter(o => !o.autoLog);
     const auto = upcoming.filter(o => o.autoLog);
-    const html = _buildReminderEmail({ today, targetDate, daysBefore, manual, auto, overdue, currency, tz });
+    // Overdue needs the same split. Without it an auto-debit item arrived with a
+    // "Log it" button, contradicting the auto card that says no action is needed
+    // — the two lists described the same SI in opposite terms.
+    const overdueManual = overdue.filter(o => !o.autoLog);
+    const overdueAuto = overdue.filter(o => o.autoLog);
+    const html = _buildReminderEmail({
+      today, targetDate, daysBefore, manual, auto,
+      overdueManual, overdueAuto, currency, tz
+    });
 
     const dueTotal = upcoming.reduce((s, o) => s + o.amount, 0);
     const count = upcoming.length + overdue.length;
-    const whenLabel = daysBefore === 0 ? 'today' : daysBefore === 1 ? 'tomorrow'
-      : 'in ' + daysBefore + ' days';
+    // Label off the nearest occurrence actually in the mail, not off daysBefore —
+    // the window can now span several days.
+    const nearest = upcoming.reduce((m, x) => !m || x.dueDate < m ? x.dueDate : m, '');
+    const nearestDiff = nearest
+      ? Math.round((_parseLocalDate(nearest) - _parseLocalDate(today)) / 86400000) : daysBefore;
+    const whenLabel = nearestDiff <= 0 ? 'today' : nearestDiff === 1 ? 'tomorrow'
+      : 'in ' + nearestDiff + ' days';
     const subject = upcoming.length
       ? 'Spendwise: ' + currency + Math.round(dueTotal).toLocaleString('en-IN') + ' due ' + whenLabel +
       ' (' + count + ' item' + (count !== 1 ? 's' : '') + ')'
@@ -2164,28 +2201,41 @@ function _buildReminderEmail(ctx) {
       </tr>
     </table>`;
 
-  const whenLabel = ctx.daysBefore === 0 ? 'today'
-    : ctx.daysBefore === 1 ? 'tomorrow' : 'in ' + ctx.daysBefore + ' days';
+  const singleDay = ctx.today === ctx.targetDate;
+  const whenLabel = singleDay ? 'today'
+    : ctx.daysBefore === 1 ? 'today or tomorrow' : 'in the next ' + ctx.daysBefore + ' days';
+  const spanLabel = singleDay ? dateLabel(ctx.today)
+    : dateLabel(ctx.today) + ' – ' + dateLabel(ctx.targetDate);
 
-  const overdueCard = ctx.overdue.length ? card(
+  const overdueCard = ctx.overdueManual.length ? card(
     'Overdue &#9888;',
     'Past their due date and not logged yet',
-    ctx.overdue.map(o => itemRow(o, true)).join(''),
+    ctx.overdueManual.map(o => itemRow(o, true)).join(''),
     'rgba(235,87,87,0.35)') : '';
+
+  // Auto-debit that auto-log did not pick up. Kept actionable — auto-log will
+  // retry inside the catch-up window, but if it is here the money has almost
+  // certainly already left the account, so recording it is the useful move.
+  const overdueAutoCard = ctx.overdueAuto.length ? card(
+    'Auto-debit not logged &#9888;',
+    'These should have logged themselves — record them if the debit went through',
+    ctx.overdueAuto.map(o => itemRow(o, true)).join(''),
+    'rgba(242,153,74,0.35)') : '';
 
   const manualCard = ctx.manual.length ? card(
     'Due ' + whenLabel,
-    dateLabel(ctx.targetDate) + ' · tap Log to record it now',
+    spanLabel + ' · tap Log to record it now',
     ctx.manual.map(o => itemRow(o, true)).join('')) : '';
 
   const autoCard = ctx.auto.length ? card(
     'Auto-debit ' + whenLabel,
-    'Logged automatically — no action needed',
+    spanLabel + ' · logged automatically, no action needed',
     ctx.auto.map(o => itemRow(o, false)).join('')) : '';
 
-  const grandTotal = [].concat(ctx.manual, ctx.auto, ctx.overdue).reduce((s, o) => s + o.amount, 0);
+  const allItems = [].concat(ctx.manual, ctx.auto, ctx.overdueManual, ctx.overdueAuto);
+  const grandTotal = allItems.reduce((s, o) => s + o.amount, 0);
   const appUrl = _getWebAppUrl();
-  const emptyNote = (!ctx.overdue.length && !ctx.manual.length && !ctx.auto.length)
+  const emptyNote = !allItems.length
     ? `<table style="width:100%;border-collapse:collapse;background:#1a1f2e;border-radius:14px;border:1px solid #272d3d;margin-bottom:14px;">
          <tr><td style="padding:22px;text-align:center;color:#5c6478;font-size:13px;">Nothing due ${whenLabel}. This is what a quiet day looks like.</td></tr>
        </table>` : '';
@@ -2205,10 +2255,11 @@ function _buildReminderEmail(ctx) {
     </div>
 
     <p style="font-size:13px;color:#8892a4;margin:0 0 20px;">
-      ${grandTotal > 0 ? fmtAmt(grandTotal) + ' across ' + (ctx.manual.length + ctx.auto.length + ctx.overdue.length) + ' item' + ((ctx.manual.length + ctx.auto.length + ctx.overdue.length) !== 1 ? 's' : '') : 'Your recurring commitments'}
+      ${grandTotal > 0 ? fmtAmt(grandTotal) + ' across ' + allItems.length + ' item' + (allItems.length !== 1 ? 's' : '') : 'Your recurring commitments'}
     </p>
 
     ${overdueCard}
+    ${overdueAutoCard}
     ${manualCard}
     ${autoCard}
     ${emptyNote}
@@ -2266,8 +2317,18 @@ function cancelRecurringReminder() {
 function saveSettingsWithReminder(reminderSettings) {
   const result = saveSettings(reminderSettings);
   if (!result.success) return result;
-  try { scheduleRecurringReminder(); } catch (e) {
-    Logger.log('scheduleRecurringReminder error: ' + e.message);
+  // saveSettings has already reconciled the trigger. Confirm it actually landed
+  // rather than scheduling a second time — a silent failure here is exactly how
+  // reminders stop arriving while Settings still claims they are on.
+  try {
+    const wanted = getSettings().recurringReminderEnabled === 'true';
+    const installed = ScriptApp.getProjectTriggers()
+      .some(t => t.getHandlerFunction() === 'recurringReminderTrigger');
+    if (wanted && !installed) {
+      return { success: false, message: 'Saved, but the reminder trigger could not be installed. Run Repair in Settings.' };
+    }
+  } catch (e) {
+    Logger.log('saveSettingsWithReminder verify error: ' + e.message);
     return { success: false, message: e.message };
   }
   return result;
